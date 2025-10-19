@@ -1068,7 +1068,7 @@ class EnhancedCatalogApp:
                         
                         # MEJORADO: Combinar con datos existentes en lugar de sobrescribir
                         if 'df' in st.session_state and st.session_state.df is not None:
-                            combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True)
+                            combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True).drop_duplicates(subset=['Producto'], keep='last')
                             st.session_state.df = combined_df
                             
                             # Tracking de fuentes
@@ -1108,7 +1108,7 @@ class EnhancedCatalogApp:
                             
                             # MEJORADO: Combinar con datos existentes
                             if 'df' in st.session_state and st.session_state.df is not None:
-                                combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True)
+                                combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True).drop_duplicates(subset=['Producto'], keep='last')
                                 st.session_state.df = combined_df
                                 
                                 # Tracking de fuentes
