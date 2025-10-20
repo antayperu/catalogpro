@@ -28,7 +28,7 @@ st.set_page_config(
 )
 
 # =============================================================================
-# CLASES AUXILIARES MEJORADAS
+# CLASES AUXILIARES MEJORADAS v1.2
 # =============================================================================
 
 class DataHandler:
@@ -141,7 +141,6 @@ class ImageManager:
         if pd.isna(image_url) or not image_url or str(image_url) == 'nan':
             return self.placeholder_image
             
-        # Verificar caché
         cache_key = f"{image_url}_{max_size}"
         if cache_key in self.image_cache:
             return self.image_cache[cache_key]
@@ -152,22 +151,18 @@ class ImageManager:
             
             image = Image.open(io.BytesIO(response.content))
             
-            # Redimensionar si es necesario
             if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
                 image.thumbnail(max_size, Image.Resampling.LANCZOS)
             
-            # Convertir a RGB si es necesario
             if image.mode in ('RGBA', 'LA'):
                 background = Image.new('RGB', image.size, (255, 255, 255))
                 background.paste(image, mask=image.split()[-1] if image.mode == 'RGBA' else None)
                 image = background
                 
-            # Guardar en caché
             self.image_cache[cache_key] = image
             return image
             
         except Exception as e:
-            st.warning(f"No se pudo cargar imagen: {str(e)}")
             return self.placeholder_image
             
     def _generate_placeholder_image(self):
@@ -195,7 +190,7 @@ class ImageManager:
         return image
 
 class CatalogGenerator:
-    """Clase para generar catálogos visuales de productos"""
+    """Clase para generar catálogos visuales de productos - MEJORADA v1.2"""
     
     def __init__(self):
         self.image_manager = ImageManager()
@@ -212,73 +207,66 @@ class CatalogGenerator:
                 if product_idx < total_products:
                     product = df.iloc[product_idx]
                     with cols[col_idx]:
-                        self._render_product_card(product, currency)
+                        self._render_product_card(product, currency, product_idx, row)
                         
-    def _render_product_card(self, product, currency):
-        """Renderizar una tarjeta de producto individual"""
+    def _render_product_card(self, product, currency, product_idx, row):
         with st.container():
+            # Image handling
             image = self.image_manager.download_image(product['ImagenURL'])
-            st.image(image, use_container_width=True)
-            
-            st.markdown(f"""
-            <div style="font-size: 1.2rem; font-weight: bold; color: #2c3e50; margin-bottom: 0.5rem;">
-                {product['Producto']}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown(f"""
-            <div style="color: #7f8c8d; font-size: 0.9rem; margin-bottom: 1rem;">
-                {product['Descripción']}
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.markdown(f"""
-                <div style="font-size: 0.8rem; color: #95a5a6;">
-                    Por {product['Unidad']}
-                </div>
-                """, unsafe_allow_html=True)
+            buffered = io.BytesIO()
+            image.save(buffered, format="PNG")
+            img_str = base64.b64encode(buffered.getvalue()).decode()
+            st.markdown(f"<div class='product-image-container'><img src='data:image/png;base64,{img_str}' alt='{product['Producto']}'></div>", unsafe_allow_html=True)
+
+            st.markdown(f"<div class='product-title'>{product['Producto']}</div>", unsafe_allow_html=True)
+            full_description = str(product['Descripción'])
+            display_description = full_description[:80] + ('...' if len(full_description) > 80 else '')
+            st.markdown(f"<div class='product-description' title='{full_description}'>{display_description}</div>", unsafe_allow_html=True)
+
+            st.markdown("<div class='product-footer'>", unsafe_allow_html=True)
+            st.markdown(f"<span class='product-unit'>Por {product['Unidad']}</span>", unsafe_allow_html=True)
+            st.markdown(f"<span class='product-price'>{currency} {product['Precio']:.2f}</span>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+            # Section for entrepreneur actions
+            with st.expander("Compartir con Cliente"):
+                st.markdown("##### Enviar a un cliente específico")
                 
-            with col2:
-                st.markdown(f"""
-                <div style="font-size: 1.4rem; font-weight: bold; color: #e74c3c; text-align: right;">
-                    {currency} {product['Precio']:.2f}
-                </div>
-                """, unsafe_allow_html=True)
+                # WhatsApp message customization
+                default_message = f"Estimado cliente, le hago llegar información del producto: {product['Producto']} - Precio: {currency} {product['Precio']:.2f}. Quedo a su disposición para cualquier consulta."
+                whatsapp_message = st.text_area("Mensaje de WhatsApp:", default_message, key=f"wa_msg_{row}_{product_idx}", height=150)
                 
-            # Botones de acción
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button(f"💬 WhatsApp", key=f"whatsapp_{product['Producto']}", help="Consultar por WhatsApp"):
-                    message = f"Hola! Me interesa el producto: {product['Producto']} - {product['Descripción']} - Precio: {currency} {product['Precio']:.2f}"
-                    whatsapp_url = f"https://wa.me/?text={quote(message)}"
-                    st.markdown(f'<a href="{whatsapp_url}" target="_blank">🔗 Abrir WhatsApp</a>', unsafe_allow_html=True)
-            
-            with col2:
-                if st.button(f"📧 Email", key=f"email_{product['Producto']}", help="Añadir a email"):
+                if st.button("Generar Enlace de WhatsApp", key=f"send_wa_{row}_{product_idx}", use_container_width=True):
+                    if whatsapp_message:
+                        whatsapp_url = f"https://wa.me/?text={quote(whatsapp_message)}"
+                        st.markdown(f'<a href="{whatsapp_url}" target="_blank" style="display:inline-block;padding:0.5rem 1rem;background-color:#25D366;color:white;border-radius:25px;text-decoration:none;">Abrir WhatsApp para Enviar</a>', unsafe_allow_html=True)
+                    else:
+                        st.warning("El mensaje no puede estar vacío.")
+
+                st.markdown("---")
+                
+                # Add to email selection
+                if st.button("Añadir a Selección de Email", key=f"add_em_{row}_{product_idx}", use_container_width=True):
                     if 'email_products' not in st.session_state:
                         st.session_state.email_products = []
-                    
-                    # Evitar duplicados
+
                     product_dict = product.to_dict()
                     if not any(p['Producto'] == product_dict['Producto'] for p in st.session_state.email_products):
                         st.session_state.email_products.append(product_dict)
-                        st.success("✅ Añadido!")
+                        st.success(f"✅ ¡{product['Producto']} añadido a la selección de email!")
                     else:
-                        st.info("Ya añadido")
-                
-            st.markdown("---")
+                        st.info(f"ℹ️ {product['Producto']} ya estaba en la selección.")
 
+        st.markdown("---")
 class EnhancedPDFExporter:
-    """Clase mejorada para exportar catálogos a PDF con imágenes - CALIDAD MEJORADA"""
+    """Clase mejorada para exportar catálogos a PDF con imágenes"""
     
     def __init__(self):
         self.styles = getSampleStyleSheet()
         self.image_manager = ImageManager()
         
     def generate_pdf_with_images(self, df, business_name, currency):
-        """Generar PDF del catálogo con imágenes de productos - VERSION MEJORADA"""
+        """Generar PDF del catálogo con imágenes de productos"""
         buffer = io.BytesIO()
         
         doc = SimpleDocTemplate(
@@ -291,14 +279,8 @@ class EnhancedPDFExporter:
         )
         
         story = []
-        
-        # Header mejorado con mejor diseño
         story.extend(self._create_enhanced_header(business_name))
-        
-        # Información del catálogo con mejor formato
         story.extend(self._create_enhanced_catalog_info(df, currency))
-        
-        # Productos con diseño mejorado
         story.extend(self._create_enhanced_product_cards(df, currency))
         
         doc.build(story)
@@ -309,7 +291,6 @@ class EnhancedPDFExporter:
         """Crear header mejorado del PDF"""
         story = []
         
-        # Logo si existe con mejor dimensionamiento
         if hasattr(st.session_state, 'logo') and st.session_state.logo is not None:
             try:
                 logo_image = Image.open(st.session_state.logo)
@@ -322,7 +303,6 @@ class EnhancedPDFExporter:
             except:
                 pass
         
-        # Título mejorado con mejor tipografía
         title_style = ParagraphStyle(
             name='EnhancedTitle',
             parent=self.styles['Title'],
@@ -345,14 +325,12 @@ class EnhancedPDFExporter:
         
         story.append(Paragraph(business_name, title_style))
         story.append(Paragraph("Catálogo de Productos Profesional", subtitle_style))
-        
-        # Línea decorativa
         story.append(Spacer(1, 10))
         
         return story
         
     def _create_enhanced_catalog_info(self, df, currency):
-        """Crear información del catálogo con mejor diseño"""
+        """Crear información del catálogo"""
         story = []
         
         info_style = ParagraphStyle(
@@ -367,10 +345,10 @@ class EnhancedPDFExporter:
         )
         
         info_text = f"""
-        <b>Fecha de Generación:</b> {datetime.now().strftime('%d de %B, %Y')}<br/>
-        <b>Total de Productos:</b> {len(df)} items<br/>
+        <b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}<br/>
+        <b>Total:</b> {len(df)} productos<br/>
         <b>Moneda:</b> {currency}<br/>
-        <b>Precio Promedio:</b> {currency} {df['Precio'].mean():.2f}
+        <b>Promedio:</b> {currency} {df['Precio'].mean():.2f}
         """
         
         story.append(Paragraph(info_text, info_style))
@@ -379,38 +357,33 @@ class EnhancedPDFExporter:
         return story
         
     def _create_enhanced_product_cards(self, df, currency):
-        """Crear tarjetas de productos con diseño mejorado"""
+        """Crear tarjetas de productos mejoradas"""
         story = []
         
-        # Productos por página optimizado
-        products_per_page = 6  # 3 filas de 2 productos para mejor espaciado
+        products_per_page = 6
         total_products = len(df)
         
         for page_start in range(0, total_products, products_per_page):
             page_end = min(page_start + products_per_page, total_products)
             page_products = df.iloc[page_start:page_end]
             
-            # Crear filas de productos con mejor espaciado
             product_data = []
             for i in range(0, len(page_products), 2):
                 row_data = []
                 
-                # Producto 1
                 product1 = page_products.iloc[i]
                 product1_cell = self._create_enhanced_product_cell(product1, currency)
                 row_data.append(product1_cell)
                 
-                # Producto 2 (si existe)
                 if i + 1 < len(page_products):
                     product2 = page_products.iloc[i + 1]
                     product2_cell = self._create_enhanced_product_cell(product2, currency)
                     row_data.append(product2_cell)
                 else:
-                    row_data.append("")  # Celda vacía si es impar
+                    row_data.append("")
                 
                 product_data.append(row_data)
             
-            # Crear tabla con mejor estilo
             if product_data:
                 products_table = Table(product_data, colWidths=[4*inch, 4*inch])
                 products_table.setStyle(TableStyle([
@@ -421,22 +394,18 @@ class EnhancedPDFExporter:
                     ('TOPPADDING', (0, 0), (-1, -1), 15),
                     ('BOTTOMPADDING', (0, 0), (-1, -1), 25),
                     ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#ecf0f1')),
-                    ('BACKGROUND', (0, 0), (-1, -1), colors.white),
                 ]))
                 
                 story.append(products_table)
                 story.append(Spacer(1, 20))
                 
-                # Añadir página nueva si no es la última página
                 if page_end < total_products:
                     story.append(PageBreak())
         
         return story
         
     def _create_enhanced_product_cell(self, product, currency):
-        """Crear celda de producto mejorada con mejor diseño"""
-        
-        # Imagen del producto con mejor dimensionamiento
+        """Crear celda de producto mejorada"""
         product_image = None
         try:
             image = self.image_manager.download_image(product['ImagenURL'], max_size=(300, 300))
@@ -445,10 +414,8 @@ class EnhancedPDFExporter:
             img_buffer.seek(0)
             product_image = RLImage(img_buffer, width=2*inch, height=2*inch)
         except:
-            # Imagen placeholder mejorada
             pass
         
-        # Estilos mejorados para texto
         title_style = ParagraphStyle(
             name='ProductTitle',
             parent=self.styles['Normal'],
@@ -488,7 +455,6 @@ class EnhancedPDFExporter:
             fontName='Helvetica'
         )
         
-        # Crear contenido de la celda
         cell_data = []
         
         if product_image:
@@ -502,7 +468,6 @@ class EnhancedPDFExporter:
         cell_data.append([Paragraph(f"{currency} {product['Precio']:.2f}", price_style)])
         cell_data.append([Paragraph(f"Por {product['Unidad']}", unit_style)])
         
-        # Crear tabla interna para la celda
         inner_table = Table(cell_data, colWidths=[3.5*inch])
         inner_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -523,57 +488,37 @@ class SimpleEmailMarketing:
         """Cargar plantillas de email predefinidas"""
         return {
             'catalogo_completo': {
-                'subject': 'Catálogo de Productos - {business_name}',
-                'body': '''Estimado/a cliente,
+                'subject': 'Catálogo - {business_name}',
+                'body': '''Estimado cliente,
 
-Nos complace enviarle nuestro catálogo actualizado de productos.
+Catálogo actualizado de productos.
 
-📋 INFORMACIÓN DEL CATÁLOGO:
-• Total de productos: {total_products}
-• Moneda: {currency}
-• Fecha: {fecha}
+Total: {total_products}
+Moneda: {currency}
+Fecha: {fecha}
 
-📄 ADJUNTO:
-Por favor encuentre adjunto nuestro catálogo completo en formato PDF con imágenes y descripciones detalladas de todos nuestros productos.
+Adjunto PDF con detalles.
 
-📱 CONTACTO:
-Para consultas, pedidos o mayor información, no dude en contactarnos por WhatsApp o responder este email.
-
-Saludos cordiales,
-{business_name}
-
----
-Catálogo generado con CatalogPro Enhanced'''
+Saludos,
+{business_name}'''
             },
             'productos_seleccionados': {
-                'subject': 'Productos de su Interés - {business_name}',
-                'body': '''Estimado/a cliente,
+                'subject': 'Productos de Interés - {business_name}',
+                'body': '''Estimado cliente,
 
-Como solicitado, le enviamos información sobre los productos de su interés:
+Productos seleccionados:
 
-🛍️ PRODUCTOS SELECCIONADOS:
 {product_list}
 
-📄 CATÁLOGO COMPLETO:
-Adjuntamos también nuestro catálogo completo para su referencia.
-
-📱 SIGUIENTE PASO:
-Para realizar su pedido o consultar disponibilidad, contáctenos por WhatsApp o responda este email.
-
-Saludos cordiales,
-{business_name}
-
----
-Catálogo generado con CatalogPro Enhanced'''
+Saludos,
+{business_name}'''
             }
         }
     
     def generate_mailto_url(self, to_email, business_name, df, currency, template_type='catalogo_completo', selected_products=None):
         """Generar URL mailto con email pre-completado"""
-        
         template = self.templates[template_type]
         
-        # Preparar variables para el email
         template_vars = {
             'business_name': business_name,
             'total_products': len(df),
@@ -582,11 +527,9 @@ Catálogo generado con CatalogPro Enhanced'''
             'product_list': self._format_product_list(selected_products, currency) if selected_products else ""
         }
         
-        # Generar asunto y cuerpo
         subject = template['subject'].format(**template_vars)
         body = template['body'].format(**template_vars)
         
-        # Crear URL mailto
         mailto_url = f"mailto:{to_email}?subject={quote(subject)}&body={quote(body)}"
         
         return mailto_url
@@ -599,9 +542,7 @@ Catálogo generado con CatalogPro Enhanced'''
         formatted_list = ""
         for i, product in enumerate(products, 1):
             formatted_list += f"{i}. {product['Producto']}\n"
-            formatted_list += f"   Descripción: {product['Descripción']}\n"
-            formatted_list += f"   Precio: {currency} {product['Precio']:.2f}\n"
-            formatted_list += f"   Unidad: {product['Unidad']}\n\n"
+            formatted_list += f"   Precio: {currency} {product['Precio']:.2f}\n\n"
         
         return formatted_list.strip()
 
@@ -611,7 +552,7 @@ class HTMLExporter:
     def __init__(self):
         self.image_manager = ImageManager()
         
-    def generate_html_catalog(self, df, business_name, currency):
+    def generate_html_catalog(self, df, business_name, currency, phone_number):
         """Generar catálogo HTML completo"""
         
         html_template = f"""
@@ -620,36 +561,50 @@ class HTMLExporter:
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>{business_name} - Catálogo Digital</title>
+            <title>{business_name} - Catálogo</title>
             <style>
-                {self._get_css_styles()}
+                * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+                body {{ font-family: Arial, sans-serif; background: #f8f9fa; }}
+                .container {{ max-width: 1200px; margin: 0 auto; padding: 0 20px; }}
+                .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 2rem 0; text-align: center; }}
+                .header h1 {{ font-size: 2.5rem; margin-bottom: 0.5rem; }}
+                .main {{ padding: 2rem 0; }}
+                .catalog-info {{ background: white; padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem; }}
+                .product-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; }}
+                .product-card {{ background: white; border-radius: 15px; padding: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.3s; }}
+                .product-card:hover {{ transform: translateY(-5px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }}
+                .product-image {{ width: 100%; height: 200px; object-fit: cover; border-radius: 10px; margin-bottom: 1rem; }}
+                .product-title {{ font-size: 1.3rem; font-weight: bold; color: #2c3e50; margin-bottom: 0.5rem; }}
+                .product-description {{ color: #7f8c8d; margin-bottom: 1rem; }}
+                .product-footer {{ display: flex; justify-content: space-between; align-items: center; }}
+                .product-price {{ font-size: 1.4rem; font-weight: bold; color: #e74c3c; }}
+                .whatsapp-btn {{ display: inline-block; background: #25d366; color: white; padding: 0.5rem 1rem; border-radius: 25px; text-decoration: none; font-weight: bold; margin-top: 1rem; }}
+                .footer {{ background: #2c3e50; color: white; text-align: center; padding: 1rem 0; margin-top: 3rem; }}
+                @media (max-width: 768px) {{ .product-grid {{ grid-template-columns: 1fr; }} }}
             </style>
         </head>
         <body>
             <header class="header">
                 <div class="container">
                     <h1>{business_name}</h1>
-                    <p>Catálogo Digital de Productos</p>
+                    <p>Catálogo Digital</p>
                 </div>
             </header>
-            
             <main class="main">
                 <div class="container">
                     <div class="catalog-info">
                         <p><strong>Fecha:</strong> {datetime.now().strftime('%d/%m/%Y')}</p>
-                        <p><strong>Total productos:</strong> {len(df)}</p>
+                        <p><strong>Total:</strong> {len(df)} productos</p>
                         <p><strong>Moneda:</strong> {currency}</p>
                     </div>
-                    
                     <div class="product-grid">
-                        {self._generate_product_cards_html(df, currency)}
+                        {self._generate_product_cards_html(df, currency, phone_number)}
                     </div>
                 </div>
             </main>
-            
             <footer class="footer">
                 <div class="container">
-                    <p>© 2025 {business_name}. Generado con CatalogPro.</p>
+                    <p>© 2025 {business_name}</p>
                 </div>
             </footer>
         </body>
@@ -658,164 +613,19 @@ class HTMLExporter:
         
         return html_template
     
-    def _get_css_styles(self):
-        """Obtener estilos CSS para el catálogo HTML"""
-        return """
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f8f9fa;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem 0;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        .main {
-            padding: 2rem 0;
-        }
-        
-        .catalog-info {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        
-        .product-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-        }
-        
-        .product-card {
-            background: white;
-            border-radius: 15px;
-            padding: 1.5rem;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease, box-shadow 0.3s ease;
-        }
-        
-        .product-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-        }
-        
-        .product-image {
-            width: 100%;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 10px;
-            margin-bottom: 1rem;
-        }
-        
-        .product-title {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-bottom: 0.5rem;
-        }
-        
-        .product-description {
-            color: #7f8c8d;
-            margin-bottom: 1rem;
-            font-size: 0.95rem;
-        }
-        
-        .product-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .product-unit {
-            font-size: 0.85rem;
-            color: #95a5a6;
-        }
-        
-        .product-price {
-            font-size: 1.4rem;
-            font-weight: bold;
-            color: #e74c3c;
-        }
-        
-        .whatsapp-btn {
-            display: inline-block;
-            background: #25d366;
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 25px;
-            text-decoration: none;
-            font-weight: bold;
-            margin-top: 1rem;
-            transition: background-color 0.3s ease;
-        }
-        
-        .whatsapp-btn:hover {
-            background: #128c7e;
-        }
-        
-        .footer {
-            background: #2c3e50;
-            color: white;
-            text-align: center;
-            padding: 1rem 0;
-            margin-top: 3rem;
-        }
-        
-        @media (max-width: 768px) {
-            .product-grid {
-                grid-template-columns: 1fr;
-            }
-            
-            .header h1 {
-                font-size: 2rem;
-            }
-        }
-        """
-    
-    def _generate_product_cards_html(self, df, currency):
+    def _generate_product_cards_html(self, df, currency, phone_number):
         """Generar tarjetas de productos en HTML"""
         cards_html = ""
         
         for _, product in df.iterrows():
-            # Procesar imagen
             image_url = product['ImagenURL']
             if pd.isna(image_url) or not image_url or str(image_url) == 'nan':
                 image_src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iI2YwZjBmMCIvPgo8dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiBmaWxsPSIjOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2luIGltYWdlbjwvdGV4dD4KPC9zdmc+"
             else:
                 image_src = str(image_url)
             
-            # Mensaje WhatsApp
-            whatsapp_message = f"Hola! Me interesa el producto: {product['Producto']} - {product['Descripción']} - Precio: {currency} {product['Precio']:.2f}"
-            whatsapp_url = f"https://wa.me/?text={quote(whatsapp_message)}"
+            whatsapp_message = f"Hola! Me interesa: {product['Producto']} - {currency} {product['Precio']:.2f}"
+            whatsapp_url = f"https://wa.me/{phone_number}?text={quote(whatsapp_message)}" if phone_number else f"https://wa.me/?text={quote(whatsapp_message)}"
             
             card_html = f"""
             <div class="product-card">
@@ -823,22 +633,31 @@ class HTMLExporter:
                 <div class="product-title">{product['Producto']}</div>
                 <div class="product-description">{product['Descripción']}</div>
                 <div class="product-footer">
-                    <span class="product-unit">Por {product['Unidad']}</span>
+                    <span>Por {product['Unidad']}</span>
                     <span class="product-price">{currency} {product['Precio']:.2f}</span>
                 </div>
-                <a href="{whatsapp_url}" class="whatsapp-btn" target="_blank">💬 Consultar por WhatsApp</a>
+                <a href="{whatsapp_url}" class="whatsapp-btn" target="_blank">💬 Consultar</a>
             </div>
             """
             
             cards_html += card_html
         
         return cards_html
+    # =============================================================================
+# PARTE 2: APLICACIÓN PRINCIPAL v1.2 - COPIAR DESPUÉS DE PARTE 1
+# =============================================================================
+
+# NOTA IMPORTANTE: Este código va DESPUÉS de toda la Parte 1 en main.py
+# La Parte 1 contiene todas las clases auxiliares
+# Esta Parte 2 contiene solo la clase EnhancedCatalogApp y el if __name__
 
 # =============================================================================
-# APLICACIÓN PRINCIPAL MEJORADA v1.1.1
+# CLASE PRINCIPAL MEJORADA
 # =============================================================================
 
 class EnhancedCatalogApp:
+    """Aplicación principal con mejoras UX/UI v1.2"""
+    
     def __init__(self):
         self.data_handler = DataHandler()
         self.catalog_generator = CatalogGenerator()
@@ -846,66 +665,94 @@ class EnhancedCatalogApp:
         self.data_cleaner = DataCleaner()
         self.email_marketing = SimpleEmailMarketing()
         self.html_exporter = HTMLExporter()
+
+        if 'df' not in st.session_state:
+            st.session_state.df = None
+        if 'data_sources' not in st.session_state:
+            st.session_state.data_sources = []
+        if 'email_products' not in st.session_state:
+            st.session_state.email_products = []
+        if 'viewed_catalog' not in st.session_state:
+            st.session_state.viewed_catalog = False
+        if 'exported' not in st.session_state:
+            st.session_state.exported = False
+        if 'logo' not in st.session_state:
+            st.session_state.logo = None
         
     def run(self):
         self.setup_styles()
         self.render_header()
+        self.render_breadcrumb()
         self.render_sidebar()
         self.render_main_content()
         
     def setup_styles(self):
-        """Configurar estilos CSS personalizados"""
+        """Estilos CSS mejorados"""
         st.markdown("""
         <style>
         .main-header {
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             padding: 2rem;
             border-radius: 10px;
-            margin-bottom: 2rem;
+            margin-bottom: 1rem;
             text-align: center;
         }
-        
         .main-header h1 {
             color: white;
             font-size: 2.5rem;
             margin-bottom: 0.5rem;
         }
-        
         .main-header p {
             color: #f0f0f0;
             font-size: 1.2rem;
         }
-        
+        .feature-badge, .easy-badge, .ux-badge {
+            color: white;
+            padding: 0.3rem 0.6rem;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 0.5rem;
+        }
         .feature-badge {
             background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-            color: white;
-            padding: 0.3rem 0.6rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            margin-left: 0.5rem;
         }
-        
         .easy-badge {
             background: linear-gradient(45deg, #2ecc71, #27ae60);
-            color: white;
-            padding: 0.3rem 0.6rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            margin-left: 0.5rem;
         }
-        
-        .fixed-badge {
-            background: linear-gradient(45deg, #9b59b6, #8e44ad);
-            color: white;
-            padding: 0.3rem 0.6rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            margin-left: 0.5rem;
+        .ux-badge {
+            background: linear-gradient(45deg, #3498db, #2980b9);
         }
-        
+        .progress-step {
+            text-align: center;
+            padding: 1rem;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        .progress-step.completed {
+            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            color: white;
+        }
+        .progress-step.active {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+        }
+        .filter-chip {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 6px 12px;
+            border-radius: 16px;
+            margin: 4px;
+            font-size: 0.9rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 16px;
+            margin: 2rem 0;
+        }
         .stButton > button {
             background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
             color: white;
@@ -913,676 +760,507 @@ class EnhancedCatalogApp:
             border-radius: 5px;
             padding: 0.5rem 1rem;
             font-weight: bold;
+            transition: all 0.3s ease;
         }
-        
         .stButton > button:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        
-        .email-button {
-            background: linear-gradient(45deg, #3498db, #2980b9) !important;
-            color: white !important;
-            border: none !important;
-            padding: 10px 20px !important;
-            border-radius: 25px !important;
-            font-weight: bold !important;
-            text-decoration: none !important;
-            display: inline-block !important;
-            margin: 10px 0 !important;
+        /* Estilos de las tarjetas de productos basados en el exportador HTML */
+        .product-card {
+            background: white;
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+            height: 100%; /* Asegura que las tarjetas en una fila tengan la misma altura */
+            display: flex;
+            flex-direction: column;
         }
-        
-        .email-button:hover {
-            background: linear-gradient(45deg, #2980b9, #3498db) !important;
-            transform: translateY(-2px) !important;
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        .product-image-container {
+            width: 100%;
+            height: 200px; /* Fixed height for all images */
+            overflow: hidden; /* Hide parts of the image that are cropped */
+            border-radius: 10px; /* Rounded corners for the container */
+            margin-bottom: 1rem;
+        }
+        .product-image-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Crop to fill the container */
+            object-position: center; /* Center the cropped image */
+        }
+        .product-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 0.5rem;
+        }
+        .product-description {
+            color: #7f8c8d;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            flex-grow: 1; /* Permite que la descripción ocupe el espacio disponible */
+        }
+        .product-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: auto; /* Empuja el footer hacia abajo */
+        }
+        .product-price {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        .product-unit {
+            font-size: 0.8rem;
+            color: #95a5a6;
+        }
+        .product-actions-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .stButton > button.whatsapp-button {
+            background: #25d366; /* WhatsApp green */
+            color: white;
+            border-radius: 25px;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            border: none;
+            transition: background 0.2s;
+        }
+        .stButton > button.whatsapp-button:hover {
+            background: #1da851;
+        }
+        .stButton > button.email-button {
+            background: #3498db; /* Streamlit blue */
+            color: white;
+            border-radius: 25px;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            border: none;
+            transition: background 0.2s;
+        }
+        .stButton > button.email-button:hover {
+            background: #2980b9;
         }
         </style>
         """, unsafe_allow_html=True)
         
     def render_header(self):
-        """Renderizar el encabezado principal"""
         st.markdown("""
         <div class="main-header">
             <h1>🛍️ CatalogPro Enhanced</h1>
-            <p>Genera catálogos profesionales con imágenes, email marketing súper fácil y exportación HTML</p>
-            <span class="feature-badge">v1.1.1</span>
-            <span class="feature-badge">PDF + Imágenes</span>
-            <span class="easy-badge">Email Súper Fácil</span>
-            <span class="feature-badge">Export HTML</span>
-            <span class="fixed-badge">Bugs Fixed</span>
+            <p>Catálogos profesionales mejorados</p>
+            <span class="feature-badge">v1.2</span>
+            <span class="feature-badge">PDF</span>
+            <span class="easy-badge">Email Fácil</span>
+            <span class="ux-badge">UX Mejorada</span>
         </div>
         """, unsafe_allow_html=True)
+    
+    def render_breadcrumb(self):
+        current_step = 0
+        if 'df' in st.session_state and st.session_state.df is not None:
+            current_step = 1
+            if hasattr(st.session_state, 'viewed_catalog'):
+                current_step = 2
+                if hasattr(st.session_state, 'exported'):
+                    current_step = 3
+        
+        st.markdown("### 🗺️ Tu Progreso")
+        steps = [("📊", "Cargar"), ("👀", "Preview"), ("📄", "Exportar"), ("📧", "Email")]
+        cols = st.columns(4)
+        
+        for idx, (col, (icon, label)) in enumerate(zip(cols, steps)):
+            with col:
+                if idx < current_step:
+                    st.markdown(f'<div class="progress-step completed"><div style="font-size:2rem">{icon}</div><div style="font-weight:bold">✅ {label}</div></div>', unsafe_allow_html=True)
+                elif idx == current_step:
+                    st.markdown(f'<div class="progress-step active"><div style="font-size:2rem">{icon}</div><div style="font-weight:bold">▶️ {label}</div></div>', unsafe_allow_html=True)
+                else:
+                    st.markdown(f'<div class="progress-step"><div style="font-size:2rem;opacity:0.4">{icon}</div><div style="opacity:0.6">{label}</div></div>', unsafe_allow_html=True)
+        st.markdown("---")
         
     def render_sidebar(self):
-        """Renderizar la barra lateral con opciones"""
         st.sidebar.header("📊 Configuración")
         
-        # Información del negocio
-        st.sidebar.subheader("🏢 Información del Negocio")
-        business_name = st.sidebar.text_input("Nombre del negocio", "Mi Empresa")
-        currency = st.sidebar.selectbox("Moneda", ["S/", "$", "€", "£"], index=0)
-        
-        # Configuración de diseño
-        st.sidebar.subheader("🎨 Diseño")
-        columns = st.sidebar.slider("Columnas por fila", 1, 4, 3)
-        
-        # Logo del negocio
-        st.sidebar.subheader("🏢 Logo del Negocio")
-        uploaded_logo = st.sidebar.file_uploader(
-            "Subir logo",
-            type=['png', 'jpg', 'jpeg'],
-            help="Recomendado: PNG, 300x100px máximo, fondo transparente"
-        )
+        with st.sidebar.expander("🏢 Negocio", expanded=True):
+            business_name = st.text_input("Nombre", "Mi Empresa", key="biz")
+            currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], key="cur")
+            phone_number = st.text_input("Número de WhatsApp", placeholder="Ej: 51987654321", key="phone")
 
-        if uploaded_logo is not None:
-            st.sidebar.image(uploaded_logo, width=200)
-            st.session_state.logo = uploaded_logo
-        else:
-            st.session_state.logo = None
-
-        # Info simplificada de email
-        st.sidebar.subheader("📧 Email Marketing")
-        st.sidebar.success("✅ Súper fácil - Sin configuración!")
-        st.sidebar.info("💡 Solo necesitas el email del destinatario. Tu cliente de email se abrirá automáticamente.")
+        with st.sidebar.expander("🎨 Diseño", expanded=False):
+            columns = st.slider("Columnas", 1, 4, 3, key="col")
+            uploaded_logo = st.file_uploader("Logo", type=['png','jpg','jpeg'], key="log")
+            if uploaded_logo:
+                st.image(uploaded_logo, width=200)
+                st.session_state.logo = uploaded_logo
+            else:
+                st.session_state.logo = None
         
-        # Guardar configuración en session_state
         st.session_state.business_name = business_name
         st.session_state.currency = currency
         st.session_state.columns = columns
+        st.session_state.phone_number = phone_number
         
-        # Estadísticas mejoradas
         if 'df' in st.session_state and st.session_state.df is not None:
-            st.sidebar.subheader("📈 Estadísticas")
-            df = st.session_state.df
-            
-            total_products = len(df)
-            avg_price = df['Precio'].mean()
-            max_price = df['Precio'].max()
-            min_price = df['Precio'].min()
-            
-            st.sidebar.metric("Total de productos", total_products)
-            st.sidebar.metric("Precio promedio", f"{currency} {avg_price:.2f}")
-            st.sidebar.metric("Precio máximo", f"{currency} {max_price:.2f}")
-            st.sidebar.metric("Precio mínimo", f"{currency} {min_price:.2f}")
-            
-            # NUEVO: Mostrar fuentes de datos
-            if hasattr(st.session_state, 'data_sources') and st.session_state.data_sources:
-                st.sidebar.subheader("📊 Fuentes de Datos")
-                for source in st.session_state.data_sources:
-                    st.sidebar.write(f"• {source}")
-                    
+            with st.sidebar.expander("📈 Stats", expanded=True):
+                df = st.session_state.df
+                st.metric("Total", len(df))
+                st.metric("Promedio", f"{currency} {df['Precio'].mean():.2f}")
+                
     def render_main_content(self):
-        """Renderizar el contenido principal"""
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cargar Datos", "👀 Vista Previa", "📄 Exportar", "📧 Email Fácil", "ℹ️ Ayuda"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cargar", "👀 Preview", "📄 Exportar", "📧 Email", "ℹ️ Ayuda"])
         
         with tab1:
             self.render_data_loading()
-            
         with tab2:
             self.render_catalog()
-            
         with tab3:
             self.render_export_options()
-            
         with tab4:
             self.render_simple_email_marketing()
-            
         with tab5:
             self.render_help()
+    
+    def render_empty_state(self, tipo, context=''):
+        states = {
+            'no_data': ('📦', 'Vacío', 'Carga productos', '📊 Cargar'),
+            'no_results': ('🔍', 'Sin resultados', 'Ajusta filtros', '🗑️ Limpiar'),
+            'no_email_products': ('📧', 'Sin selección', 'Ve a Preview', '👀 Preview')
+        }
+        icon, title, desc, btn = states[tipo]
+        st.markdown(f'<div class="empty-state"><div style="font-size:4rem">{icon}</div><h2>{title}</h2><p style="color:#7f8c8d">{desc}</p></div>', unsafe_allow_html=True)
+        if st.button(btn, use_container_width=True, type="primary", key=f"es_{tipo}_{context}_{id(self)}"):
+            st.info("💡 Usa tabs arriba")
+    
+    def render_active_filters(self, search, price_range, unit, min_p, max_p):
+        filters = []
+        if search:
+            filters.append(('🔍', f"'{search}'"))
+        if price_range != (min_p, max_p):
+            filters.append(('💰', f"{price_range[0]:.0f}-{price_range[1]:.0f}"))
+        if unit != 'Todos':
+            filters.append(('📦', unit))
+        
+        if filters:
+            st.markdown("**Filtros activos:**")
+            html = ""
+            for icon, label in filters:
+                html += f'<span class="filter-chip">{icon} {label}</span>'
+            st.markdown(html, unsafe_allow_html=True)
+            if st.button("🗑️ Limpiar", key="clf"):
+                st.rerun()
+            st.markdown("---")
+    
+    def render_data_loading_with_progress(self, df, cleaned_df, source):
+        progress = st.progress(0)
+        status = st.empty()
+        
+        try:
+            status.text("🧹 Limpiando...")
+            progress.progress(33)
+            time.sleep(0.3)
+            
+            status.text("🔄 Combinando...")
+            progress.progress(66)
+            
+            if 'df' in st.session_state and st.session_state.df is not None:
+                dupes = cleaned_df[cleaned_df['Producto'].isin(st.session_state.df['Producto'])]
+                if len(dupes) > 0:
+                    st.warning(f"⚠️ {len(dupes)} duplicados")
+                
+                combined = pd.concat([st.session_state.df, cleaned_df], ignore_index=True)
+                combined = combined.drop_duplicates(subset=['Producto'], keep='last')
+                st.session_state.df = combined
+                
+                if 'data_sources' not in st.session_state:
+                    st.session_state.data_sources = []
+                st.session_state.data_sources.append(source)
+                
+                status.text("✅ Completado!")
+                progress.progress(100)
+                time.sleep(0.5)
+                progress.empty()
+                status.empty()
+                st.success(f"✅ Total: {len(combined)} ({len(cleaned_df)} nuevos)")
+            else:
+                st.session_state.df = cleaned_df
+                st.session_state.data_sources = [source]
+                status.text("✅ Completado!")
+                progress.progress(100)
+                time.sleep(0.5)
+                progress.empty()
+                status.empty()
+                st.success(f"✅ {len(cleaned_df)} productos")
+        except Exception as e:
+            progress.empty()
+            status.empty()
+            raise e
             
     def render_data_loading(self):
-        """Renderizar la sección de carga de datos - MEJORADA para múltiples fuentes"""
-        st.header("📊 Cargar Datos del Catálogo")
+        st.header("📊 Cargar Datos")
         
-        # NUEVO: Botón para limpiar todos los datos
         if 'df' in st.session_state and st.session_state.df is not None:
-            col_clean1, col_clean2 = st.columns([3, 1])
-            with col_clean2:
-                if st.button("🗑️ Limpiar Todos los Datos", type="secondary"):
+            c1, c2 = st.columns([3, 1])
+            with c2:
+                if st.button("🗑️ Limpiar", type="secondary", key="cld"):
                     st.session_state.df = None
-                    if 'data_sources' in st.session_state:
-                        st.session_state.data_sources = []
-                    st.success("✅ Datos limpiados completamente!")
+                    st.session_state.data_sources = []
+                    st.success("✅ Limpiado!")
                     st.rerun()
-            
-            with col_clean1:
-                total_products = len(st.session_state.df)
-                sources_count = len(getattr(st.session_state, 'data_sources', []))
-                st.info(f"📊 **Datos actuales:** {total_products} productos de {sources_count} fuente(s)")
+            with c1:
+                st.info(f"📊 {len(st.session_state.df)} productos")
         
-        col1, col2 = st.columns(2)
+        c1, c2 = st.columns(2)
         
-        with col1:
-            st.subheader("📁 Cargar archivo Excel")
-            uploaded_file = st.file_uploader(
-                "Selecciona un archivo Excel (.xlsx)",
-                type=['xlsx'],
-                help="El archivo debe contener las columnas: ImagenURL, Producto, Descripción, Unidad, Precio"
-            )
+        with c1:
+            st.subheader("📁 Excel")
+            file = st.file_uploader("Archivo .xlsx", type=['xlsx'], key="exc")
             
-            if uploaded_file is not None:
+            if file:
                 try:
-                    with st.spinner("Cargando datos..."):
-                        df = self.data_handler.load_excel(uploaded_file)
-                        cleaned_df = self.data_cleaner.clean_data(df)
-                        
-                        # MEJORADO: Combinar con datos existentes en lugar de sobrescribir
-                        if 'df' in st.session_state and st.session_state.df is not None:
-                            combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True).drop_duplicates(subset=['Producto'], keep='last')
-                            st.session_state.df = combined_df
-                            
-                            # Tracking de fuentes
-                            if 'data_sources' not in st.session_state:
-                                st.session_state.data_sources = []
-                            st.session_state.data_sources.append(f"Excel: {uploaded_file.name}")
-                            
-                            st.success(f"✅ Datos combinados! Total: {len(combined_df)} productos ({len(cleaned_df)} nuevos desde Excel)")
-                        else:
-                            st.session_state.df = cleaned_df
-                            st.session_state.data_sources = [f"Excel: {uploaded_file.name}"]
-                            st.success(f"✅ Archivo Excel cargado! {len(cleaned_df)} productos encontrados.")
-                        
-                        st.subheader("👀 Vista previa de los datos")
-                        display_df = st.session_state.df.tail().copy()  # Mostrar últimos datos añadidos
-                        display_df['Descripción'] = display_df['Descripción'].apply(
-                            lambda x: str(x)[:100] + '...' if len(str(x)) > 100 else str(x)
-                        )
-                        st.dataframe(display_df)
-                        
+                    df = self.data_handler.load_excel(file)
+                    cleaned = self.data_cleaner.clean_data(df)
+                    self.render_data_loading_with_progress(df, cleaned, f"Excel: {file.name}")
+                    
+                    st.subheader("👀 Preview")
+                    display = st.session_state.df.tail(5).copy()
+                    display['Descripción'] = display['Descripción'].apply(lambda x: str(x)[:60]+'...' if len(str(x))>60 else str(x))
+                    st.dataframe(display, use_container_width=True)
                 except Exception as e:
-                    st.error(f"❌ Error al cargar el archivo Excel: {str(e)}")
+                    st.error(f"❌ {str(e)}")
                     
-        with col2:
-            st.subheader("🔗 Desde Google Sheets")
-            sheets_url = st.text_input(
-                "URL de Google Sheets",
-                placeholder="https://docs.google.com/spreadsheets/d/..."
-            )
+        with c2:
+            st.subheader("🔗 Google Sheets")
+            url = st.text_input("URL", key="gurl")
             
-            if st.button("Cargar desde Google Sheets"):
-                if sheets_url:
+            if st.button("Cargar", key="gld"):
+                if url:
                     try:
-                        with st.spinner("Cargando desde Google Sheets..."):
-                            df = self.data_handler.load_google_sheets(sheets_url)
-                            cleaned_df = self.data_cleaner.clean_data(df)
-                            
-                            # MEJORADO: Combinar con datos existentes
-                            if 'df' in st.session_state and st.session_state.df is not None:
-                                combined_df = pd.concat([st.session_state.df, cleaned_df], ignore_index=True).drop_duplicates(subset=['Producto'], keep='last')
-                                st.session_state.df = combined_df
-                                
-                                # Tracking de fuentes
-                                if 'data_sources' not in st.session_state:
-                                    st.session_state.data_sources = []
-                                st.session_state.data_sources.append("Google Sheets")
-                                
-                                st.success(f"✅ Datos combinados! Total: {len(combined_df)} productos ({len(cleaned_df)} nuevos desde Google Sheets)")
-                            else:
-                                st.session_state.df = cleaned_df
-                                st.session_state.data_sources = ["Google Sheets"]
-                                st.success(f"✅ Google Sheets cargado! {len(cleaned_df)} productos encontrados.")
-                            
-                            st.subheader("👀 Vista previa de los datos")
-                            display_df = st.session_state.df.tail().copy()  # Mostrar últimos datos
-                            display_df['Descripción'] = display_df['Descripción'].apply(
-                                lambda x: str(x)[:100] + '...' if len(str(x)) > 100 else str(x)
-                            )
-                            st.dataframe(display_df)
-                            
+                        df = self.data_handler.load_google_sheets(url)
+                        cleaned = self.data_cleaner.clean_data(df)
+                        self.render_data_loading_with_progress(df, cleaned, "Sheets")
+                        
+                        st.subheader("👀 Preview")
+                        display = st.session_state.df.tail(5).copy()
+                        display['Descripción'] = display['Descripción'].apply(lambda x: str(x)[:60]+'...' if len(str(x))>60 else str(x))
+                        st.dataframe(display, use_container_width=True)
                     except Exception as e:
-                        st.error(f"❌ Error al cargar desde Google Sheets: {str(e)}")
+                        st.error(f"❌ {str(e)}")
                 else:
-                    st.warning("⚠️ Por favor, ingresa una URL válida de Google Sheets")
-                    
-        # Ejemplo de estructura de datos
-        st.subheader("📋 Estructura de datos requerida")
-        example_data = {
-            'ImagenURL': ['https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300', 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=300'],
-            'Producto': ['Aceite Primor', 'Galleta Oreo'],
-            'Descripción': ['Aceite vegetal 1L', 'Paquete x 6 unidades'],
-            'Unidad': ['Unidad', 'Paquete'],
-            'Precio': [10.50, 4.20]
-        }
-        example_df = pd.DataFrame(example_data)
-        st.dataframe(example_df)
+                    st.warning("⚠️ URL requerida")
+        
+        st.subheader("📋 Estructura")
+        ex = pd.DataFrame({
+            'ImagenURL': ['https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=300'],
+            'Producto': ['Aceite'],
+            'Descripción': ['1L'],
+            'Unidad': ['Unidad'],
+            'Precio': [10.50]
+        })
+        st.dataframe(ex, use_container_width=True)
         
     def render_catalog(self):
-        """Renderizar el catálogo de productos - VISTA PREVIA PARA EL DUEÑO"""
-        st.header("👀 Vista Previa del Catálogo")
-        st.info("💡 Esta es una vista previa de cómo verán tus clientes el catálogo. Usa los filtros para personalizar antes de exportar.")
-        
-        if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Por favor, carga primero los datos en la pestaña 'Cargar Datos'")
-            return
-            
-        df = st.session_state.df
-        
-        # Limpiar lista de productos seleccionados para email
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("🗑️ Limpiar selección de email"):
-                st.session_state.email_products = []
-                st.success("Lista de email limpiada!")
-        
-        with col2:
-            # Mostrar productos seleccionados para email
-            if 'email_products' in st.session_state and st.session_state.email_products:
-                st.info(f"📧 Productos seleccionados para email: {len(st.session_state.email_products)}")
-        
-        # Filtros
-        st.subheader("🔍 Filtros")
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            search_term = st.text_input("🔍 Buscar producto")
-            
-        with col2:
-            min_price = float(df['Precio'].min())
-            max_price = float(df['Precio'].max())
-            
-            if min_price == max_price:
-                st.info(f"💰 Precio único: {st.session_state.currency} {min_price:.2f}")
-                price_range = (min_price, max_price)
-            else:
-                price_range = st.slider("💰 Rango de precios", 
-                                       min_price, 
-                                       max_price, 
-                                       (min_price, max_price))
-            
-        with col3:
-            if 'Unidad' in df.columns:
+        st.header("👀 Vista Previa")
+
+        if 'df' in st.session_state and st.session_state.df is not None:
+            st.session_state.viewed_catalog = True
+            df = st.session_state.df
+
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("🗑️ Limpiar email", key="cle"):
+                    st.session_state.email_products = []
+                    st.success("✅!")
+            with c2:
+                if 'email_products' in st.session_state and st.session_state.email_products:
+                    st.info(f"📧 {len(st.session_state.email_products)}")
+
+            st.subheader("🔍 Filtros")
+            c1, c2, c3 = st.columns(3)
+
+            with c1:
+                search = st.text_input("Buscar", key="srch")
+            with c2:
+                minp = float(df['Precio'].min())
+                maxp = float(df['Precio'].max())
+                if minp == maxp:
+                    st.info(f"💰 {st.session_state.currency} {minp:.2f}")
+                    prange = (minp, maxp)
+                else:
+                    prange = st.slider("Precio", minp, maxp, (minp, maxp), key="pr")
+            with c3:
                 units = ['Todos'] + list(df['Unidad'].unique())
-                selected_unit = st.selectbox("📦 Unidad", units)
-            else:
-                selected_unit = 'Todos'
-                
-        # Aplicar filtros
-        filtered_df = df.copy()
-        
-        if search_term:
-            filtered_df = filtered_df[
-                filtered_df['Producto'].str.contains(search_term, case=False, na=False) |
-                filtered_df['Descripción'].str.contains(search_term, case=False, na=False)
-            ]
-            
-        filtered_df = filtered_df[
-            (filtered_df['Precio'] >= price_range[0]) & 
-            (filtered_df['Precio'] <= price_range[1])
-        ]
-        
-        if selected_unit != 'Todos':
-            filtered_df = filtered_df[filtered_df['Unidad'] == selected_unit]
-            
-        # Mostrar productos
-        if len(filtered_df) == 0:
-            st.info("🔍 No se encontraron productos con los filtros seleccionados")
-            return
-            
-        st.info(f"📊 Mostrando {len(filtered_df)} de {len(df)} productos")
-        
-        # Generar catálogo
-        self.catalog_generator.render_catalog(filtered_df, st.session_state.columns, st.session_state.currency)
+                unit = st.selectbox("Unidad", units, key="un")
+
+            self.render_active_filters(search, prange, unit, minp, maxp)
+
+            filtered = df.copy()
+            if search:
+                filtered = filtered[filtered['Producto'].str.contains(search, case=False, na=False) | filtered['Descripción'].str.contains(search, case=False, na=False)]
+            filtered = filtered[(filtered['Precio']>=prange[0]) & (filtered['Precio']<=prange[1])]
+            if unit != 'Todos':
+                filtered = filtered[filtered['Unidad']==unit]
+
+            if len(filtered) == 0:
+                self.render_empty_state('no_results', 'catalog_tab_no_results')
+                return
+
+            st.info(f"📊 {len(filtered)} de {len(df)}")
+
+            if len(filtered) < len(df):
+                if st.button(f"⚡ Exportar {len(filtered)} Filtrados", key="exf"):
+                    with st.spinner("..."):
+                        pdf = self.pdf_exporter.generate_pdf_with_images(filtered, st.session_state.business_name, st.session_state.currency)
+                        st.download_button("📥 Descargar", pdf, f"filtrado_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlf")
+                        st.success("✅!")
+                st.markdown("---")
+
+            self.catalog_generator.render_catalog(filtered, st.session_state.columns, st.session_state.currency)
+        else:
+            self.render_empty_state('no_data', 'catalog_tab_no_df')
         
     def render_export_options(self):
-        """Renderizar opciones de exportación mejoradas con GUIDANCE"""
-        st.header("📄 Exportar Catálogo")
+        st.header("📄 Exportar")
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Por favor, carga primero los datos en la pestaña 'Cargar Datos'")
+            self.render_empty_state('no_data', 'export_tab_no_df')
             return
             
         df = st.session_state.df
         
-        # NUEVO: Guidance sobre cuándo usar cada formato
-        st.subheader("📋 ¿Cuál formato elegir?")
-        col_guide1, col_guide2 = st.columns(2)
-        
-        with col_guide1:
-            st.info("""
-            📄 **Usar PDF cuando:**
-            • Envías por email como adjunto
-            • Quieres imprimir el catálogo
-            • Clientes prefieren documentos tradicionales
-            • Presentaciones offline
-            """)
-            
-        with col_guide2:
-            st.info("""
-            🌐 **Usar HTML cuando:**
-            • Compartes links en redes sociales
-            • Subes a tu página web
-            • Clientes navegan desde móviles
-            • Quieres mejor SEO
-            """)
-        
+        st.subheader("📋 ¿Cuál?")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.info("📄 **PDF:** Email, imprimir")
+        with c2:
+            st.info("🌐 **HTML:** Web, redes")
         st.markdown("---")
         
-        col1, col2, col3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
         
-        with col1:
-            st.subheader("📊 PDF con Imágenes MEJORADO")
-            st.markdown("**✨ v1.1.1** PDF profesional con diseño mejorado y mejor calidad")
-            
-            if st.button("🎨 Generar PDF Profesional"):
+        with c1:
+            st.subheader("📊 PDF")
+            if st.button("Generar PDF", key="gpdf"):
                 try:
-                    with st.spinner("Generando PDF con calidad mejorada..."):
-                        pdf_buffer = self.pdf_exporter.generate_pdf_with_images(
-                            df, 
-                            st.session_state.business_name,
-                            st.session_state.currency
-                        )
-                        
-                        st.download_button(
-                            label="📥 Descargar PDF Profesional",
-                            data=pdf_buffer,
-                            file_name=f"catalogo_profesional_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                            mime="application/pdf"
-                        )
-                        
-                        st.success("✅ PDF profesional generado exitosamente!")
-                        st.info("💡 **Calidad mejorada:** Mejor tipografía, espaciado optimizado, imágenes de mayor resolución")
-                        
+                    with st.spinner("..."):
+                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
+                        st.download_button("📥 Descargar", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp")
+                        st.session_state.exported = True
+                        st.success("✅!")
                 except Exception as e:
-                    st.error(f"❌ Error al generar PDF: {str(e)}")
+                    st.error(f"❌ {str(e)}")
                     
-        with col2:
-            st.subheader("🌐 Exportar HTML")
-            st.markdown("**✨ Calidad Superior** Catálogo web completo y navegable")
-            
-            if st.button("🔗 Generar HTML"):
+        with c2:
+            st.subheader("🌐 HTML")
+            if st.button("Generar HTML", key="ghml"):
                 try:
-                    with st.spinner("Generando catálogo HTML..."):
-                        html_content = self.html_exporter.generate_html_catalog(
-                            df,
-                            st.session_state.business_name,
-                            st.session_state.currency
-                        )
-                        
-                        st.download_button(
-                            label="📥 Descargar HTML",
-                            data=html_content.encode('utf-8'),
-                            file_name=f"catalogo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
-                            mime="text/html"
-                        )
-                        
-                        st.success("✅ Catálogo HTML generado exitosamente!")
-                        st.info("💡 **Recomendado para:** Compartir en redes sociales y páginas web")
-                        
-                        # Vista previa
-                        with st.expander("👀 Vista previa HTML"):
-                            st.components.v1.html(html_content, height=600, scrolling=True)
-                        
+                    with st.spinner("..."):
+                        html = self.html_exporter.generate_html_catalog(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'))
+                        st.download_button("📥 Descargar", html.encode('utf-8'), f"catalogo_{datetime.now().strftime('%Y%m%d')}.html", "text/html", key="dlh")
+                        st.session_state.exported = True
+                        st.success("✅!")
                 except Exception as e:
-                    st.error(f"❌ Error al generar HTML: {str(e)}")
+                    st.error(f"❌ {str(e)}")
                     
-        with col3:
-            st.subheader("📊 Resumen de Datos")
-            
-            total_products = len(df)
-            avg_price = df['Precio'].mean()
-            total_value = df['Precio'].sum()
-            
-            st.metric("Total productos", total_products)
-            st.metric("Precio promedio", f"{st.session_state.currency} {avg_price:.2f}")
-            st.metric("Valor total", f"{st.session_state.currency} {total_value:.2f}")
-            
-            # NUEVO: Mostrar fuentes de datos en resumen
-            if hasattr(st.session_state, 'data_sources') and st.session_state.data_sources:
-                st.write("**Fuentes de datos:**")
-                for source in st.session_state.data_sources:
-                    st.write(f"• {source}")
+        with c3:
+            st.subheader("📊 Resumen")
+            st.metric("Total", len(df))
+            st.metric("Promedio", f"{st.session_state.currency} {df['Precio'].mean():.2f}")
             
     def render_simple_email_marketing(self):
-        """Renderizar funcionalidades de email marketing simplificadas con MEJORES MENSAJES"""
-        st.header("📧 Email Marketing Súper Fácil")
+        st.header("📧 Email")
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Por favor, carga primero los datos en la pestaña 'Cargar Datos'")
+            self.render_empty_state('no_data', 'email_tab_no_df')
             return
             
         df = st.session_state.df
+        st.success("✨ Sin config!")
         
-        # Información destacada
-        st.success("✨ **¡Sin configuración complicada!** Solo necesitas el email del destinatario.")
-        st.info("💡 **Cómo funciona:** Se abrirá tu cliente de email (Gmail, Outlook, etc.) con todo pre-completado. Solo presiona 'Enviar'.")
+        c1, c2 = st.columns([2, 1])
         
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.subheader("📮 Enviar Catálogo por Email")
+        with c1:
+            to_email = st.text_input("📧 Email", key="toe")
+            email_type = st.selectbox("Tipo", ["catalogo_completo", "productos_seleccionados"], format_func=lambda x: "📋 Completo" if x=="catalogo_completo" else "🛍️ Seleccionados", key="ety")
             
-            # Email del destinatario
-            to_email = st.text_input("📧 Email del destinatario", placeholder="cliente@ejemplo.com")
-            
-            # Tipo de envío
-            email_type = st.selectbox(
-                "📋 Tipo de email",
-                ["catalogo_completo", "productos_seleccionados"],
-                format_func=lambda x: "📋 Catálogo Completo" if x == "catalogo_completo" else "🛍️ Productos Seleccionados"
-            )
-            
-            # Mostrar productos seleccionados si aplica
             if email_type == "productos_seleccionados":
                 if 'email_products' in st.session_state and st.session_state.email_products:
-                    st.write(f"📦 **Productos seleccionados:** {len(st.session_state.email_products)}")
-                    with st.expander("Ver productos seleccionados"):
-                        for product in st.session_state.email_products:
-                            st.write(f"• **{product['Producto']}** - {st.session_state.currency} {product['Precio']:.2f}")
+                    st.write(f"📦 {len(st.session_state.email_products)}")
                 else:
-                    st.warning("⚠️ No has seleccionado productos. Ve al catálogo y usa los botones '📧 Email'")
-                    st.info("💡 En la pestaña 'Vista Previa', haz clic en los botones '📧 Email' de los productos que te interesan.")
+                    self.render_empty_state('no_email_products', 'email_tab_no_products')
             
-            # Botones de acción principales
-            col1_1, col1_2 = st.columns(2)
+            c1_1, c1_2 = st.columns(2)
             
-            with col1_1:
-                # Botón para generar PDF primero
-                if st.button("📄 Generar PDF para Email", disabled=not to_email, use_container_width=True):
+            with c1_1:
+                if st.button("📄 PDF", disabled=not to_email, key="pem"):
                     try:
-                        with st.spinner("Generando PDF para adjuntar..."):
-                            pdf_buffer = self.pdf_exporter.generate_pdf_with_images(
-                                df, 
-                                st.session_state.business_name,
-                                st.session_state.currency
-                            )
-                            
-                            # Guardar PDF en session state
-                            st.session_state.pdf_for_email = pdf_buffer
-                            
-                            st.download_button(
-                                label="📥 Descargar PDF para adjuntar",
-                                data=pdf_buffer,
-                                file_name=f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf",
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                            
-                            st.success("✅ PDF listo! Descárgalo y tenlo preparado para adjuntar.")
-                            
+                        with st.spinner("..."):
+                            pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
+                            st.download_button("📥", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlem")
+                            st.success("✅!")
                     except Exception as e:
-                        st.error(f"❌ Error al generar PDF: {str(e)}")
+                        st.error(f"❌ {str(e)}")
             
-            with col1_2:
-                # Botón para abrir email con MENSAJES MEJORADOS
-                if st.button("📧 Abrir Email Pre-completado", disabled=not to_email, use_container_width=True):
+            with c1_2:
+                if st.button("📧 Abrir", disabled=not to_email, key="oem"):
                     try:
-                        # Determinar productos seleccionados
-                        selected_products = None
+                        sel = None
                         if email_type == "productos_seleccionados" and 'email_products' in st.session_state:
-                            selected_products = st.session_state.email_products
+                            sel = st.session_state.email_products
                         
-                        # Generar URL mailto
-                        mailto_url = self.email_marketing.generate_mailto_url(
-                            to_email=to_email,
-                            business_name=st.session_state.business_name,
-                            df=df,
-                            currency=st.session_state.currency,
-                            template_type=email_type,
-                            selected_products=selected_products
-                        )
-                        
-                        # MEJORADO: Mensajes más claros sobre el comportamiento
-                        st.markdown(f"""
-                        <script>
-                        window.open('{mailto_url}', '_blank');
-                        </script>
-                        <div style="text-align: center; margin: 20px 0;">
-                            <p style="color: green; font-weight: bold;">✅ Intentando abrir tu cliente de email...</p>
-                            <p style="color: #666;">Si no se abrió automáticamente (normal en algunos navegadores), haz clic en el enlace de abajo:</p>
-                            <a href="{mailto_url}" class="email-button">📧 Abrir Email Manualmente</a>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        st.info("💡 **Es normal que no se abra automáticamente** - Los navegadores modernos bloquean pop-ups por seguridad. Usa el enlace manual.")
-                        st.success("🎉 **¡Email listo!** Revisa tu cliente de email, adjunta el PDF descargado y presiona enviar.")
-                        
-                        # Limpiar productos seleccionados después del envío
+                        mailto = self.email_marketing.generate_mailto_url(to_email, st.session_state.business_name, df, st.session_state.currency, email_type, sel)
+                        st.markdown(f'<a href="{mailto}" target="_blank" style="background:#3498db;color:white;padding:10px 20px;border-radius:25px;text-decoration:none;display:inline-block">📧 Abrir Email</a>', unsafe_allow_html=True)
+                        st.info("💡 Usa enlace si no abre")
+                        st.success("🎉!")
                         if 'email_products' in st.session_state:
                             st.session_state.email_products = []
-                            
                     except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
+                        st.error(f"❌ {str(e)}")
         
-        with col2:
-            st.subheader("📊 Información")
-            
-            st.markdown("### ✅ Ventajas")
-            st.write("• ✨ **Cero configuración**")
-            st.write("• 🚀 **Súper rápido**")
-            st.write("• 🔒 **100% seguro**")
-            st.write("• 📱 **Funciona en móviles**")
-            
-            # Productos seleccionados
-            if 'email_products' in st.session_state:
-                selected_count = len(st.session_state.email_products)
-                st.metric("Productos seleccionados", selected_count)
-            
-            st.markdown("### 📋 Plantillas")
-            st.write("• 📋 **Catálogo Completo**")
-            st.write("• 🛍️ **Productos Seleccionados**")
-            
-            st.markdown("### 💡 Pasos Simples")
-            st.write("1. **Email** del destinatario")
-            st.write("2. **Generar PDF** para adjuntar")
-            st.write("3. **Abrir Email** pre-completado")
-            st.write("4. **Adjuntar PDF** y enviar")
+        with c2:
+            st.subheader("📊")
+            st.write("✨ Cero config")
+            st.write("🚀 Rápido")
                     
     def render_help(self):
-        """Renderizar la sección de ayuda mejorada con nuevas funcionalidades"""
-        st.header("ℹ️ Ayuda y Documentación")
-        
+        st.header("ℹ️ Ayuda")
         st.markdown("""
-        ## 🚀 Cómo usar CatalogPro Enhanced v1.1.1
+        ## CatalogPro v1.2
         
-        ### ✨ Funcionalidades v1.1.1 - Bugs Corregidos
-        - **✅ FIXED**: Múltiples fuentes de datos - Ahora Excel + Google Sheets se combinan
-        - **✅ FIXED**: Calidad PDF mejorada - Diseño profesional igualado con HTML
-        - **✅ IMPROVED**: Mensajes email más claros - Mejor guidance
-        - **✅ NEW**: Guidance HTML vs PDF - Saber cuándo usar cada uno
+        ### Novedades
+        - ✅ Keys únicas
+        - ✅ Progress bars  
+        - ✅ Breadcrumb
+        - ✅ Empty states
+        - ✅ Exportar filtrados
         
-        ### 📊 Múltiples Fuentes de Datos - ¡AHORA FUNCIONA!
+        ### Uso
+        1. Cargar Excel/Sheets
+        2. Preview y filtrar
+        3. Exportar PDF/HTML
+        4. Email fácil
         
-        **Flujo recomendado:**
-        1. **Carga Excel** con tu inventario base
-        2. **Añade Google Sheets** con productos nuevos o actualizaciones  
-        3. **Resultado**: Catálogo combinado de ambas fuentes
-        4. **Botón limpiar**: Para empezar desde cero cuando necesites
-        
-        ### 📄 PDF vs 🌐 HTML - ¿Cuándo usar cada uno?
-        
-        **📄 PDF - Ideal para:**
-        - Enviar por **email como adjunto**
-        - **Imprimir** catálogos físicos
-        - **Presentaciones** offline a clientes
-        - Clientes que prefieren **documentos tradicionales**
-        
-        **🌐 HTML - Ideal para:**
-        - **Compartir links** en WhatsApp/redes sociales
-        - **Subir a páginas web** como sección productos
-        - Clientes **jóvenes y digitales**
-        - Mejor **SEO** y visibilidad web
-        
-        ### 📧 Email Marketing - Súper Simplificado
-        
-        **¿Por qué no se abre automáticamente?**
-        - **Es normal** - Navegadores bloquean pop-ups por seguridad
-        - **Usa enlace manual** - Está diseñado para eso
-        - **Funciona igual** - Tu cliente de email se abre con todo listo
-        
-        ### 🎯 Proceso Paso a Paso Actualizado:
-        
-        #### 1. **Cargar Datos (Mejorado)**
-        - Excel: Sube archivo .xlsx como base
-        - Google Sheets: Añade productos adicionales
-        - **Ambos se combinan** automáticamente
-        - Usa "Limpiar datos" para empezar de cero
-        
-        #### 2. **Vista Previa** (Para el dueño)
-        - Revisa cómo se verá el catálogo combinado
-        - Filtra y configura antes de exportar
-        - Selecciona productos específicos para email
-        
-        #### 3. **Exportar (Con Guidance)**
-        - **Lee la guía** PDF vs HTML para decidir
-        - **PDF**: Calidad mejorada, más profesional
-        - **HTML**: Superior para digital
-        
-        #### 4. **Email Fácil (Mensajes Claros)**
-        - Genera PDF primero
-        - Abre email pre-completado
-        - **Normal** si requiere clic manual
-        - Adjunta PDF y envía
-        
-        ### 💡 Estructura de Datos (Sin Cambios)
-        ```
-        ImagenURL    | URL pública de imagen
-        Producto     | Nombre del producto  
-        Descripción  | Descripción detallada
-        Unidad       | Unidad de venta (Kg, Unidad, etc)
-        Precio       | Precio numérico (sin símbolos)
-        ```
-        
-        ### 🛠️ Troubleshooting Actualizado
-        
-        **Múltiples fuentes no se combinan:**
-        - ✅ **SOLUCIONADO** en v1.1.1
-        - Ahora Excel + Google Sheets se suman automáticamente
-        
-        **PDF se ve mal comparado con HTML:**
-        - ✅ **MEJORADO** en v1.1.1  
-        - Calidad visual significativamente mejorada
-        - Tipografía profesional, mejor espaciado
-        
-        **Email no se abre automáticamente:**
-        - ✅ **ESPERADO** - Navegadores bloquean pop-ups
-        - ✅ **SOLUCIÓN** - Usar enlace manual (diseñado para eso)
-        - ✅ **MEJORADO** - Mensajes más claros sobre qué esperar
-        
-        **No sé si usar PDF o HTML:**
-        - ✅ **SOLUCIONADO** - Guidance clara en pestaña Exportar
-        - Regla simple: PDF para email/imprimir, HTML para web/links
-        
-        ### 📱 Compatibilidad (Sin Cambios)
-        - **Navegadores**: Chrome, Firefox, Safari, Edge
-        - **Email clients**: Gmail, Outlook, Apple Mail, etc
-        - **Móviles**: Funciona en iOS y Android
-        
-        ### 🎉 Cambios v1.1.1 Resumen
-        
-        **Bugs Corregidos:**
-        - ✅ Múltiples fuentes de datos
-        - ✅ Calidad PDF mejorada
-        - ✅ Mensajes email más claros
-        - ✅ Guidance HTML vs PDF
-        
-        **Nuevas Features:**
-        - 🆕 Tracking de fuentes de datos
-        - 🆕 Botón limpiar datos
-        - 🆕 Guidance cuándo usar cada formato
-        - 🆕 Feedback mejorado al usuario
+        ### Estructura
+        - ImagenURL: URL
+        - Producto: Nombre
+        - Descripción: Detalle
+        - Unidad: Kg, etc
+        - Precio: Número
         """)
 
-# Ejecutar la aplicación mejorada v1.1.1
+# =============================================================================
+# EJECUTAR
+# =============================================================================
+
 if __name__ == "__main__":
     app = EnhancedCatalogApp()
     app.run()
