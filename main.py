@@ -18,11 +18,13 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from auth import check_authentication, AuthManager
+import time
 
 # Configuración de la página
 st.set_page_config(
     page_title="CatalogPro Enhanced - Catálogo Digital",
-    page_icon="🛍️",
+    page_icon=" ",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -678,13 +680,24 @@ class EnhancedCatalogApp:
             st.session_state.exported = False
         if 'logo' not in st.session_state:
             st.session_state.logo = None
+        if 'auth_manager' not in st.session_state:
+            st.session_state.auth_manager = None
         
     def run(self):
+        # PRIMERO: Verificar autenticación
+        auth = check_authentication()
+        st.session_state.auth_manager = auth
+        
+        # Calcular is_admin una sola vez
+        is_admin = False
+        if st.session_state.get("authenticated"):
+            is_admin = auth.is_admin(st.session_state.user_email)
+
+        # DESPUÉS: Continuar normal
         self.setup_styles()
         self.render_header()
-        self.render_breadcrumb()
-        self.render_sidebar()
-        self.render_main_content()
+        self.render_sidebar(is_admin)
+        self.render_main_content(is_admin)
         
     def setup_styles(self):
         """Estilos CSS mejorados"""
@@ -856,7 +869,7 @@ class EnhancedCatalogApp:
     def render_header(self):
         st.markdown("""
         <div class="main-header">
-            <h1>🛍️ CatalogPro Enhanced</h1>
+            <h1>CatalogPro Enhanced</h1>
             <p>Catálogos profesionales mejorados</p>
             <span class="feature-badge">v1.2</span>
             <span class="feature-badge">PDF</span>
@@ -865,34 +878,12 @@ class EnhancedCatalogApp:
         </div>
         """, unsafe_allow_html=True)
     
-    def render_breadcrumb(self):
-        current_step = 0
-        if 'df' in st.session_state and st.session_state.df is not None:
-            current_step = 1
-            if hasattr(st.session_state, 'viewed_catalog'):
-                current_step = 2
-                if hasattr(st.session_state, 'exported'):
-                    current_step = 3
-        
-        st.markdown("### 🗺️ Tu Progreso")
-        steps = [("📊", "Cargar"), ("👀", "Preview"), ("📄", "Exportar"), ("📧", "Email")]
-        cols = st.columns(4)
-        
-        for idx, (col, (icon, label)) in enumerate(zip(cols, steps)):
-            with col:
-                if idx < current_step:
-                    st.markdown(f'<div class="progress-step completed"><div style="font-size:2rem">{icon}</div><div style="font-weight:bold">✅ {label}</div></div>', unsafe_allow_html=True)
-                elif idx == current_step:
-                    st.markdown(f'<div class="progress-step active"><div style="font-size:2rem">{icon}</div><div style="font-weight:bold">▶️ {label}</div></div>', unsafe_allow_html=True)
-                else:
-                    st.markdown(f'<div class="progress-step"><div style="font-size:2rem;opacity:0.4">{icon}</div><div style="opacity:0.6">{label}</div></div>', unsafe_allow_html=True)
-        st.markdown("---")
-        
-    def render_sidebar(self):
+    def render_sidebar(self, is_admin):
         st.sidebar.header("📊 Configuración")
         
         with st.sidebar.expander("🏢 Negocio", expanded=True):
-            business_name = st.text_input("Nombre", "Mi Empresa", key="biz")
+            default_biz_name = st.session_state.user_info.get('business_name', 'Mi Empresa')
+            business_name = st.text_input("Nombre", default_biz_name, key="biz")
             currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], key="cur")
             phone_number = st.text_input("Número de WhatsApp", placeholder="Ej: 51987654321", key="phone")
 
@@ -916,8 +907,15 @@ class EnhancedCatalogApp:
                 st.metric("Total", len(df))
                 st.metric("Promedio", f"{currency} {df['Precio'].mean():.2f}")
                 
-    def render_main_content(self):
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Cargar", "👀 Preview", "📄 Exportar", "📧 Email", "ℹ️ Ayuda"])
+    def render_main_content(self, is_admin):
+        if is_admin:
+            tabs_list = ["📊 Cargar", "👀 Preview", "📄 Exportar", 
+                         "📧 Email", "👨‍💼 Admin", "ℹ️ Ayuda"]
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(tabs_list)
+        else:
+            tabs_list = ["📊 Cargar", "👀 Preview", "📄 Exportar", 
+                         "📧 Email", "ℹ️ Ayuda"]
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(tabs_list)
         
         with tab1:
             self.render_data_loading()
@@ -927,8 +925,15 @@ class EnhancedCatalogApp:
             self.render_export_options()
         with tab4:
             self.render_simple_email_marketing()
-        with tab5:
-            self.render_help()
+        
+        if is_admin:
+            with tab5:
+                self.render_admin_panel()
+            with tab6:
+                self.render_help()
+        else:
+            with tab5:
+                self.render_help()
     
     def render_empty_state(self, tipo, context=''):
         states = {
@@ -944,11 +949,11 @@ class EnhancedCatalogApp:
     def render_active_filters(self, search, price_range, unit, min_p, max_p):
         filters = []
         if search:
-            filters.append(('🔍', f"'{search}'"))
+            filters.append(('', f"'{search}'"))
         if price_range != (min_p, max_p):
-            filters.append(('💰', f"{price_range[0]:.0f}-{price_range[1]:.0f}"))
+            filters.append(('', f"{price_range[0]:.0f}-{price_range[1]:.0f}"))
         if unit != 'Todos':
-            filters.append(('📦', unit))
+            filters.append(('', unit))
         
         if filters:
             st.markdown("**Filtros activos:**")
@@ -956,7 +961,7 @@ class EnhancedCatalogApp:
             for icon, label in filters:
                 html += f'<span class="filter-chip">{icon} {label}</span>'
             st.markdown(html, unsafe_allow_html=True)
-            if st.button("🗑️ Limpiar", key="clf"):
+            if st.button("Limpiar", key="clf"):
                 st.rerun()
             st.markdown("---")
     
@@ -975,7 +980,7 @@ class EnhancedCatalogApp:
             if 'df' in st.session_state and st.session_state.df is not None:
                 dupes = cleaned_df[cleaned_df['Producto'].isin(st.session_state.df['Producto'])]
                 if len(dupes) > 0:
-                    st.warning(f"⚠️ {len(dupes)} duplicados")
+                    st.warning(f"{len(dupes)} duplicados")
                 
                 combined = pd.concat([st.session_state.df, cleaned_df], ignore_index=True)
                 combined = combined.drop_duplicates(subset=['Producto'], keep='last')
@@ -990,7 +995,7 @@ class EnhancedCatalogApp:
                 time.sleep(0.5)
                 progress.empty()
                 status.empty()
-                st.success(f"✅ Total: {len(combined)} ({len(cleaned_df)} nuevos)")
+                st.success(f"Total: {len(combined)} ({len(cleaned_df)} nuevos)")
             else:
                 st.session_state.df = cleaned_df
                 st.session_state.data_sources = [source]
@@ -999,14 +1004,14 @@ class EnhancedCatalogApp:
                 time.sleep(0.5)
                 progress.empty()
                 status.empty()
-                st.success(f"✅ {len(cleaned_df)} productos")
+                st.success(f"{len(cleaned_df)} productos")
         except Exception as e:
             progress.empty()
             status.empty()
             raise e
             
     def render_data_loading(self):
-        st.header("📊 Cargar Datos")
+        st.header("Cargar Datos")
         
         if 'df' in st.session_state and st.session_state.df is not None:
             c1, c2 = st.columns([3, 1])
@@ -1017,12 +1022,12 @@ class EnhancedCatalogApp:
                     st.success("✅ Limpiado!")
                     st.rerun()
             with c1:
-                st.info(f"📊 {len(st.session_state.df)} productos")
+                st.info(f"{len(st.session_state.df)} productos")
         
         c1, c2 = st.columns(2)
         
         with c1:
-            st.subheader("📁 Excel")
+            st.subheader("Excel")
             file = st.file_uploader("Archivo .xlsx", type=['xlsx'], key="exc")
             
             if file:
@@ -1039,7 +1044,7 @@ class EnhancedCatalogApp:
                     st.error(f"❌ {str(e)}")
                     
         with c2:
-            st.subheader("🔗 Google Sheets")
+            st.subheader("Google Sheets")
             url = st.text_input("URL", key="gurl")
             
             if st.button("Cargar", key="gld"):
@@ -1056,7 +1061,7 @@ class EnhancedCatalogApp:
                     except Exception as e:
                         st.error(f"❌ {str(e)}")
                 else:
-                    st.warning("⚠️ URL requerida")
+                    st.warning("URL requerida")
         
         st.subheader("📋 Estructura")
         ex = pd.DataFrame({
@@ -1069,7 +1074,7 @@ class EnhancedCatalogApp:
         st.dataframe(ex, use_container_width=True)
         
     def render_catalog(self):
-        st.header("👀 Vista Previa")
+        st.header("Vista Previa")
 
         if 'df' in st.session_state and st.session_state.df is not None:
             st.session_state.viewed_catalog = True
@@ -1077,14 +1082,14 @@ class EnhancedCatalogApp:
 
             c1, c2 = st.columns(2)
             with c1:
-                if st.button("🗑️ Limpiar email", key="cle"):
+                if st.button("Limpiar email", key="cle"):
                     st.session_state.email_products = []
                     st.success("✅!")
             with c2:
                 if 'email_products' in st.session_state and st.session_state.email_products:
-                    st.info(f"📧 {len(st.session_state.email_products)}")
+                    st.info(f"{len(st.session_state.email_products)}")
 
-            st.subheader("🔍 Filtros")
+            st.subheader("Filtros")
             c1, c2, c3 = st.columns(3)
 
             with c1:
@@ -1114,14 +1119,14 @@ class EnhancedCatalogApp:
                 self.render_empty_state('no_results', 'catalog_tab_no_results')
                 return
 
-            st.info(f"📊 {len(filtered)} de {len(df)}")
+            st.info(f"{len(filtered)} de {len(df)}")
 
             if len(filtered) < len(df):
-                if st.button(f"⚡ Exportar {len(filtered)} Filtrados", key="exf"):
+                if st.button(f"Exportar {len(filtered)} Filtrados", key="exf"):
                     with st.spinner("..."):
                         pdf = self.pdf_exporter.generate_pdf_with_images(filtered, st.session_state.business_name, st.session_state.currency)
-                        st.download_button("📥 Descargar", pdf, f"filtrado_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlf")
-                        st.success("✅!")
+                        st.download_button("Descargar", pdf, f"filtrado_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlf")
+                        st.success("¡Email listo en tu cliente de correo!")
                 st.markdown("---")
 
             self.catalog_generator.render_catalog(filtered, st.session_state.columns, st.session_state.currency)
@@ -1129,7 +1134,7 @@ class EnhancedCatalogApp:
             self.render_empty_state('no_data', 'catalog_tab_no_df')
         
     def render_export_options(self):
-        st.header("📄 Exportar")
+        st.header("Exportar")
         
         if 'df' not in st.session_state or st.session_state.df is None:
             self.render_empty_state('no_data', 'export_tab_no_df')
@@ -1137,125 +1142,340 @@ class EnhancedCatalogApp:
             
         df = st.session_state.df
         
-        st.subheader("📋 ¿Cuál?")
+        st.subheader("Selecciona el Formato de Exportación")
         c1, c2 = st.columns(2)
         with c1:
-            st.info("📄 **PDF:** Email, imprimir")
+            st.info("**PDF:** Email, imprimir")
         with c2:
-            st.info("🌐 **HTML:** Web, redes")
+            st.info("**HTML:** Web, redes")
         st.markdown("---")
         
         c1, c2, c3 = st.columns(3)
         
         with c1:
-            st.subheader("📊 PDF")
+            st.subheader("PDF")
             if st.button("Generar PDF", key="gpdf"):
                 try:
                     with st.spinner("..."):
                         pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
-                        st.download_button("📥 Descargar", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp")
                         st.session_state.exported = True
-                        st.success("✅!")
+                        st.success("¡PDF generado con éxito!")
                 except Exception as e:
                     st.error(f"❌ {str(e)}")
                     
         with c2:
-            st.subheader("🌐 HTML")
+            st.subheader("HTML")
             if st.button("Generar HTML", key="ghml"):
                 try:
                     with st.spinner("..."):
                         html = self.html_exporter.generate_html_catalog(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'))
                         st.download_button("📥 Descargar", html.encode('utf-8'), f"catalogo_{datetime.now().strftime('%Y%m%d')}.html", "text/html", key="dlh")
                         st.session_state.exported = True
-                        st.success("✅!")
+                        st.success("¡HTML generado con éxito!")
                 except Exception as e:
                     st.error(f"❌ {str(e)}")
                     
         with c3:
-            st.subheader("📊 Resumen")
+            st.subheader("Resumen")
             st.metric("Total", len(df))
             st.metric("Promedio", f"{st.session_state.currency} {df['Precio'].mean():.2f}")
             
     def render_simple_email_marketing(self):
-        st.header("📧 Email")
+        st.header("Email")
         
         if 'df' not in st.session_state or st.session_state.df is None:
             self.render_empty_state('no_data', 'email_tab_no_df')
             return
             
         df = st.session_state.df
-        st.success("✨ Sin config!")
+        st.info("¡Funcionalidad de email lista para usar!")
         
-        c1, c2 = st.columns([2, 1])
+        to_email = st.text_input("Email del Destinatario", key="toe")
+        email_type = st.selectbox("Tipo", ["catalogo_completo", "productos_seleccionados"], format_func=lambda x: "Completo" if x=="catalogo_completo" else "Seleccionados", key="ety")
         
-        with c1:
-            to_email = st.text_input("📧 Email", key="toe")
-            email_type = st.selectbox("Tipo", ["catalogo_completo", "productos_seleccionados"], format_func=lambda x: "📋 Completo" if x=="catalogo_completo" else "🛍️ Seleccionados", key="ety")
-            
-            if email_type == "productos_seleccionados":
-                if 'email_products' in st.session_state and st.session_state.email_products:
-                    st.write(f"📦 {len(st.session_state.email_products)}")
-                else:
-                    self.render_empty_state('no_email_products', 'email_tab_no_products')
-            
-            c1_1, c1_2 = st.columns(2)
-            
-            with c1_1:
-                if st.button("📄 PDF", disabled=not to_email, key="pem"):
-                    try:
-                        with st.spinner("..."):
-                            pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
-                            st.download_button("📥", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlem")
-                            st.success("✅!")
-                    except Exception as e:
-                        st.error(f"❌ {str(e)}")
-            
-            with c1_2:
-                if st.button("📧 Abrir", disabled=not to_email, key="oem"):
-                    try:
-                        sel = None
-                        if email_type == "productos_seleccionados" and 'email_products' in st.session_state:
-                            sel = st.session_state.email_products
-                        
-                        mailto = self.email_marketing.generate_mailto_url(to_email, st.session_state.business_name, df, st.session_state.currency, email_type, sel)
-                        st.markdown(f'<a href="{mailto}" target="_blank" style="background:#3498db;color:white;padding:10px 20px;border-radius:25px;text-decoration:none;display:inline-block">📧 Abrir Email</a>', unsafe_allow_html=True)
-                        st.info("💡 Usa enlace si no abre")
-                        st.success("🎉!")
-                        if 'email_products' in st.session_state:
-                            st.session_state.email_products = []
-                    except Exception as e:
-                        st.error(f"❌ {str(e)}")
+        if email_type == "productos_seleccionados":
+            if 'email_products' in st.session_state and st.session_state.email_products:
+                st.write(f"{len(st.session_state.email_products)}")
+            else:
+                self.render_empty_state('no_email_products', 'email_tab_no_products')
         
-        with c2:
-            st.subheader("📊")
-            st.write("✨ Cero config")
-            st.write("🚀 Rápido")
+        c1_1, c1_2 = st.columns(2)
+        
+        with c1_1:
+            if st.button("Descargar PDF", disabled=not to_email, key="pem"):
+                try:
+                    with st.spinner("..."):
+                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
+                        st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlem")
+                        st.success("¡PDF descargado con éxito!")
+                except Exception as e:
+                    st.error(f"❌ {str(e)}")
+        
+        with c1_2:
+            if st.button("Abrir en Cliente de Email", disabled=not to_email, key="oem"):
+                try:
+                    sel = None
+                    if email_type == "productos_seleccionados" and 'email_products' in st.session_state:
+                        sel = st.session_state.email_products
+                    
+                    mailto = self.email_marketing.generate_mailto_url(to_email, st.session_state.business_name, df, st.session_state.currency, email_type, sel)
+                    st.markdown(f'<a href="{mailto}" target="_blank" style="background:#3498db;color:white;padding:10px 20px;border-radius:25px;text-decoration:none;display:inline-block">Abrir Email</a>', unsafe_allow_html=True)
+                    st.info("Usa enlace si no abre")
+                    st.success("¡Email listo en tu cliente de correo!")
+                    if 'email_products' in st.session_state:
+                        st.session_state.email_products = []
+                except Exception as e:
+                    st.error(f"❌ {str(e)}")
+        
+
                     
     def render_help(self):
-        st.header("ℹ️ Ayuda")
-        st.markdown("""
-        ## CatalogPro v1.2
+        st.header("Guía de Usuario de CatalogPro")
+        st.markdown("¡Bienvenido! Esta guía te ayudará a sacar el máximo provecho de CatalogPro.")
+
+        st.markdown("---")
+
+        # --- Guía General ---
+        st.subheader("Pasos Principales")
+
+        with st.expander("Paso 1: Iniciar Sesión", expanded=True):
+            st.markdown("""
+            Para acceder a la aplicación, simplemente ingresa tu **email y contraseña** autorizados. 
+            
+            Si no tienes acceso, contacta al administrador de la cuenta (verás su correo en la pantalla de login).
+            """)
+
+        with st.expander("Paso 2: Configurar tu Negocio", expanded=False):
+            st.markdown("""
+            Antes de crear tu catálogo, personalízalo con tu marca desde la **barra lateral izquierda**. Estas opciones aparecerán en todos tus catálogos exportados.
+
+            *   **🏢 Negocio:**
+                *   **Nombre:** El nombre de tu empresa.
+                *   **Moneda:** El símbolo de la moneda que usas (S/, $, €, etc.).
+                *   **Número de WhatsApp:** Tu número de contacto para que los clientes puedan consultarte desde el catálogo HTML.
+
+            *   **🎨 Diseño:**
+                *   **Columnas:** Define cuántos productos se mostrarán por fila en la `Vista Previa`.
+                *   **Logo:** Sube el logo de tu empresa. Aparecerá en la cabecera de tus catálogos en PDF, dándoles un toque más profesional.
+            """)
+
+        with st.expander("Paso 3: Cargar Tus Productos", expanded=False):
+            st.markdown("""
+            Es el paso clave para crear tu catálogo. Tienes dos opciones:
+            
+            *   **Subir un archivo Excel (.xlsx):** Ideal para quienes ya gestionan su inventario en hojas de cálculo.
+            *   **Usar un enlace de Google Sheets:** Perfecto para catálogos colaborativos o basados en la nube.
+
+            **Formato Requerido:**
+            Tu archivo debe tener **exactamente** las siguientes 5 columnas para funcionar correctamente:
+            
+            | Nombre de Columna | Descripción                                    |
+            |-------------------|------------------------------------------------|
+            | `ImagenURL`       | Enlace público (URL) a la imagen del producto. |
+            | `Producto`        | Nombre del producto.                           |
+            | `Descripción`     | Breve descripción del producto.                |
+            | `Unidad`          | Unidad de venta (Ej: Kg, Litro, Paquete).      |
+            | `Precio`          | Precio del producto (solo el número).          |
+
+            💡 **Consejo:** Puedes descargar un archivo de ejemplo desde la pestaña `Cargar` para usarlo como plantilla.
+            """)
+
+        with st.expander("Paso 4: Visualizar y Filtrar (Preview)"):
+            st.markdown("""
+            Una vez cargados tus productos, esta pestaña te permite:
+            
+            *   **Ver tu catálogo** tal como lo vería un cliente.
+            *   **Usar los filtros** (buscar por nombre, rango de precio o unidad) para encontrar productos específicos rápidamente).
+            *   **Compartir un producto individualmente:** Usa el botón `Compartir con Cliente` en cada tarjeta de producto para enviar un mensaje personalizado por WhatsApp o para añadirlo a una lista de envío por email.
+            """)
+
+        with st.expander("Paso 5: Exportar tu Catálogo"):
+            st.markdown("""
+            Aquí es donde creas los archivos finales de tu catálogo. Tienes dos formatos poderosos:
+
+            *   **PDF (📄):** La mejor opción para:
+                *   Enviar por correo como un archivo adjunto profesional.
+                *   Imprimir tu catálogo.
+                *   Compartir en un formato de documento clásico.
+
+            *   **HTML (🌐):** La mejor opción para:
+                *   **Compartir como un enlace web** en WhatsApp, redes sociales o tu página web.
+                *   Ofrecer una experiencia interactiva y fácil de navegar, especialmente en móviles.
+            """)
+
+        with st.expander("Paso 6: Enviar por Email"):
+            st.markdown("""
+            Esta pestaña te permite enviar rápidamente un correo electrónico a tus clientes. 
+            
+            1.  **Ingresa el email** del destinatario.
+            2.  **Elige el tipo de correo:** puedes enviar el catálogo completo o solo los productos que seleccionaste previamente en la pestaña `Preview`.
+            3.  **Haz clic en `Abrir Email`:** Esto abrirá tu aplicación de correo predeterminada (Gmail, Outlook, etc.) con un borrador listo para enviar.
+            """)
+
+        # --- Guía de Administrador ---
+        auth = st.session_state.auth_manager
+        if auth and auth.is_admin(st.session_state.user_email):
+            st.markdown("---")
+            st.subheader("Guía para Administradores")
+            with st.expander("Gestión de Usuarios en el Panel 'Admin'"):
+                st.markdown("""
+                Como administrador, tienes acceso a la pestaña `Admin` para gestionar quién puede usar la aplicación.
+
+                *   **Agregar Usuario:** En la parte superior, encontrarás un formulario para añadir nuevos usuarios. Simplemente completa los datos (incluyendo una contraseña inicial) y haz clic en `Agregar Usuario`.
+                
+                *   **Gestionar Usuarios Existentes:** En la lista `Usuarios Autorizados`, puedes expandir el perfil de cada usuario para:
+                    *   **Cambiar Rol:** Usa el botón `Hacer Admin` o `Quitar Admin` para cambiar los permisos de un usuario.
+                    *   **Cambiar Contraseña:** Utiliza el formulario para asignarle una nueva contraseña a un usuario si la olvida.
+                    *   **Eliminar Usuario:** Haz clic en el ícono de la papelera (🗑️) para revocar el acceso permanentemente.
+                """)
+
+        # --- Preguntas Frecuentes ---
+        st.markdown("---")
+        st.subheader("Preguntas Frecuentes (FAQ)")
+        with st.expander("Mis imágenes no se cargan, ¿qué hago?"):
+            st.markdown("""
+            Esto suele ocurrir por dos razones:
+            1.  **La URL no es pública:** La URL de la imagen debe ser accesible para cualquiera en internet. No funcionará si la imagen está en tu computadora o en un servicio privado como Google Drive sin compartirla públicamente.
+            2.  **La URL no es una imagen directa:** La URL debe terminar en `.jpg`, `.png`, `.gif`, etc. 
+
+            **Solución Rápida:**
+            1.  Busca una imagen en Google.
+            2.  Haz clic derecho sobre la imagen y selecciona **"Copiar dirección de imagen"**.
+            3.  Pega esa URL en tu archivo Excel o Google Sheets. Si la imagen se ve en el navegador al pegar la URL, ¡funcionará en CatalogPro!
+            """)
+
+        with st.expander("¿Qué es el usuario 'admin@antayperu.com'?"):
+            st.markdown("""
+            Es el **usuario raíz** o **super-administrador** del sistema. Se crea por defecto para asegurar que siempre haya una forma de acceder y gestionar la aplicación. Por seguridad, este usuario no puede ser eliminado ni se le pueden quitar los permisos de administrador desde la interfaz.
+            """)
+
+    def render_admin_panel(self):
+        """Panel de administración de usuarios"""
+        st.header("👨‍💼 Panel de Administración")
         
-        ### Novedades
-        - ✅ Keys únicas
-        - ✅ Progress bars  
-        - ✅ Breadcrumb
-        - ✅ Empty states
-        - ✅ Exportar filtrados
+        auth = st.session_state.auth_manager
         
-        ### Uso
-        1. Cargar Excel/Sheets
-        2. Preview y filtrar
-        3. Exportar PDF/HTML
-        4. Email fácil
+        if not auth.is_admin(st.session_state.user_email):
+            st.error("No tienes permisos de administrador")
+            return
         
-        ### Estructura
-        - ImagenURL: URL
-        - Producto: Nombre
-        - Descripción: Detalle
-        - Unidad: Kg, etc
-        - Precio: Número
-        """)
+        st.subheader("Agregar Usuario")
+        
+        with st.form("add_user_form", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            with c1:
+                new_email = st.text_input("Email", placeholder="usuario@empresa.com")
+                new_name = st.text_input("Nombre", placeholder="Juan Pérez")
+                new_business = st.text_input("Empresa", placeholder="Mi Empresa S.A.")
+            with c2:
+                new_password = st.text_input("Contraseña", type="password")
+                confirm_password = st.text_input("Confirmar Contraseña", type="password")
+            
+            submitted = st.form_submit_button("Agregar Usuario", use_container_width=True, type="primary")
+            
+            if submitted:
+                if new_email and new_name and new_business and new_password:
+                    if new_password == confirm_password:
+                        try:
+                            if auth.add_user(new_email, new_name, new_business, new_password):
+                                st.success(f"Usuario {new_email} agregado!")
+                                st.balloons()
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.warning("Email ya registrado")
+                        except Exception as e:
+                            st.error(f"{str(e)}")
+                    else:
+                        st.error("Las contraseñas no coinciden")
+                else:
+                    st.error("❌ Completa todos los campos")
+        
+        st.markdown("---")
+        
+        st.subheader("Usuarios Autorizados")
+        
+        users_list = auth.get_all_users()
+        
+        if not users_list:
+            st.info("ℹ️ No hay usuarios registrados")
+        else:
+            search = st.text_input("Buscar", key="adm_search")
+            
+            filtered = users_list
+            if search:
+                filtered = [u for u in users_list if search.lower() in u['email'].lower() or search.lower() in u['info'].get('name', '').lower()]
+            
+            st.write(f"**Total:** {len(users_list)} | **Mostrando:** {len(filtered)}")
+            
+            for user in filtered:
+                email = user['email']
+                info = user['info']
+                
+                with st.expander(f"👤 {info.get('name', 'Sin nombre')} - {email}"):
+                    col1, col2 = st.columns([3, 1])
+                    
+                    with col1:
+                        st.write(f"**Email:** {email}")
+                        st.write(f"**Nombre:** {info.get('name', 'N/A')}")
+                        st.write(f"**Empresa:** {info.get('business_name', 'N/A')}")
+                        st.write(f"**Registrado:** {info.get('created_at', 'N/A')[:10]}")
+                        
+                        last = info.get('last_login')
+                        st.write(f"**Último acceso:** {last[:10] if last else 'Nunca'}")
+                        st.write(f"**Rol:** {'Admin' if info.get('is_admin') else 'Usuario'}")
+                    
+                    with col2:
+                        if email != auth.admin_email:
+                            if st.button("", key=f"del_{email}", help="Eliminar usuario", type="secondary"):
+                                if auth.remove_user(email):
+                                    st.success(f"✅ {email} eliminado")
+                                    time.sleep(1)
+                                    st.rerun()
+                            
+                            is_currently_admin = info.get('is_admin', False)
+                            button_text = "Quitar Admin" if is_currently_admin else "Hacer Admin"
+                            if st.button(button_text, key=f"toggle_admin_{email}", help="Cambiar rol de usuario"):
+                                if auth.toggle_admin_status(email):
+                                    st.success(f"Rol de {email} actualizado.")
+                                    time.sleep(1)
+                                    st.rerun()
+                        else:
+                            st.info("Admin Principal")
+
+                    with st.form(f"update_pass_{email}"):
+                        st.markdown("**Cambiar Contraseña**")
+                        new_pass = st.text_input("Nueva Contraseña", type="password", key=f"new_pass_{email}")
+                        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password", key=f"confirm_pass_{email}")
+                        
+                        if st.form_submit_button("Cambiar Contraseña", use_container_width=True):
+                            if new_pass and new_pass == confirm_pass:
+                                if auth.update_password(email, new_pass):
+                                    st.success("Contraseña actualizada!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("No se pudo actualizar")
+                            elif not new_pass:
+                                st.warning("La contraseña no puede estar vacía")
+                            else:
+                                st.error("Las contraseñas no coinciden")
+        
+        st.markdown("---")
+        
+        st.subheader("Estadísticas")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Total", len(users_list))
+        
+        with col2:
+            admins = sum(1 for u in users_list if u['info'].get('is_admin'))
+            st.metric("Admins", admins)
+        
+        with col3:
+            st.metric("Regulares", len(users_list) - admins)
 
 # =============================================================================
 # EJECUTAR
