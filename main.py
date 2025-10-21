@@ -21,16 +21,18 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from auth import check_authentication, AuthManager
 import time
 
+__version__ = "1.2"
+
 # Configuración de la página
 st.set_page_config(
-    page_title="CatalogPro Enhanced - Catálogo Digital",
-    page_icon=" ",
+    page_title="CatalogPro",
+    page_icon="assets/favicon_antay.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =============================================================================
-# CLASES AUXILIARES MEJORADAS v1.2
+# CLASES AUXILIARES MEJORADAS v{__version__}
 # =============================================================================
 
 class DataHandler:
@@ -192,7 +194,7 @@ class ImageManager:
         return image
 
 class CatalogGenerator:
-    """Clase para generar catálogos visuales de productos - MEJORADA v1.2"""
+    """Clase para generar catálogos visuales de productos - MEJORADA v{__version__}"""
     
     def __init__(self):
         self.image_manager = ImageManager()
@@ -646,7 +648,7 @@ class HTMLExporter:
         
         return cards_html
     # =============================================================================
-# PARTE 2: APLICACIÓN PRINCIPAL v1.2 - COPIAR DESPUÉS DE PARTE 1
+# PARTE 2: APLICACIÓN PRINCIPAL v{__version__} - COPIAR DESPUÉS DE PARTE 1
 # =============================================================================
 
 # NOTA IMPORTANTE: Este código va DESPUÉS de toda la Parte 1 en main.py
@@ -657,8 +659,8 @@ class HTMLExporter:
 # CLASE PRINCIPAL MEJORADA
 # =============================================================================
 
-class EnhancedCatalogApp:
-    """Aplicación principal con mejoras UX/UI v1.2"""
+class CatalogProApp:
+    """Aplicación principal con mejoras UX/UI v{__version__}"""
     
     def __init__(self):
         self.data_handler = DataHandler()
@@ -686,7 +688,8 @@ class EnhancedCatalogApp:
     def run(self):
         # PRIMERO: Verificar autenticación
         auth = check_authentication()
-        st.session_state.auth_manager = auth
+        self.auth_manager = auth # Assign to instance attribute
+        st.session_state.auth_manager = auth # Also keep in session_state for other uses
         
         # Calcular is_admin una sola vez
         is_admin = False
@@ -698,6 +701,25 @@ class EnhancedCatalogApp:
         self.render_header()
         self.render_sidebar(is_admin)
         self.render_main_content(is_admin)
+
+    def _update_user_setting(self, setting_key, new_value):
+        """Helper to update a single user setting and save it."""
+        if st.session_state.authenticated and st.session_state.user_email:
+            user_email = st.session_state.user_email
+            user_info = st.session_state.user_info
+
+            # Update the specific setting in user_info
+            user_info[setting_key] = new_value
+            st.session_state.user_info = user_info # Update session state
+
+            # Call AuthManager to persist the change
+            self.auth_manager.update_user_settings(
+                user_email,
+                user_info.get('business_name', ''),
+                user_info.get('currency', 'S/'),
+                user_info.get('phone_number', '')
+            )
+            st.session_state.auth_manager = self.auth_manager # Update auth_manager in session state
         
     def setup_styles(self):
         """Estilos CSS mejorados"""
@@ -867,25 +889,54 @@ class EnhancedCatalogApp:
         """, unsafe_allow_html=True)
         
     def render_header(self):
-        st.markdown("""
+        st.markdown(f"""
         <div class="main-header">
-            <h1>CatalogPro Enhanced</h1>
-            <p>Catálogos profesionales mejorados</p>
-            <span class="feature-badge">v1.2</span>
+            <h1>CatalogPro</h1>
+            <p>Tu solución profesional para catálogos digitales</p>
+            <p>by Antay Perú</p>
+            <span class="feature-badge">v{__version__}</span>
             <span class="feature-badge">PDF</span>
             <span class="easy-badge">Email Fácil</span>
-            <span class="ux-badge">UX Mejorada</span>
         </div>
         """, unsafe_allow_html=True)
     
     def render_sidebar(self, is_admin):
         st.sidebar.header("📊 Configuración")
         
+        # Get user info from session state
+        user_info = st.session_state.user_info if st.session_state.authenticated else {}
+
         with st.sidebar.expander("🏢 Negocio", expanded=True):
-            default_biz_name = st.session_state.user_info.get('business_name', 'Mi Empresa')
-            business_name = st.text_input("Nombre", default_biz_name, key="biz")
-            currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], key="cur")
-            phone_number = st.text_input("Número de WhatsApp", placeholder="Ej: 51987654321", key="phone")
+            # Business Name
+            current_biz_name = user_info.get('business_name', 'Mi Empresa')
+            business_name = st.text_input(
+                "Nombre", 
+                value=current_biz_name, 
+                key="biz",
+                on_change=lambda: self._update_user_setting('business_name', st.session_state.biz)
+            )
+
+            # Currency
+            currencies = ["S/", "$", "€", "£"]
+            current_currency = user_info.get('currency', 'S/')
+            currency_index = currencies.index(current_currency) if current_currency in currencies else 0
+            currency = st.selectbox(
+                "Moneda", 
+                currencies, 
+                index=currency_index, 
+                key="cur",
+                on_change=lambda: self._update_user_setting('currency', st.session_state.cur)
+            )
+
+            # Phone Number
+            current_phone_number = user_info.get('phone_number', '')
+            phone_number = st.text_input(
+                "Número de WhatsApp", 
+                value=current_phone_number, 
+                placeholder="Ej: 51987654321", 
+                key="phone",
+                on_change=lambda: self._update_user_setting('phone_number', st.session_state.phone)
+            )
 
         with st.sidebar.expander("🎨 Diseño", expanded=False):
             columns = st.slider("Columnas", 1, 4, 3, key="col")
@@ -896,6 +947,7 @@ class EnhancedCatalogApp:
             else:
                 st.session_state.logo = None
         
+        # Update session state with current values (even if not changed, for consistency)
         st.session_state.business_name = business_name
         st.session_state.currency = currency
         st.session_state.columns = columns
@@ -1483,5 +1535,5 @@ class EnhancedCatalogApp:
 # =============================================================================
 
 if __name__ == "__main__":
-    app = EnhancedCatalogApp()
+    app = CatalogProApp()
     app.run()

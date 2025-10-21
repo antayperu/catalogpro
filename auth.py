@@ -35,7 +35,9 @@ class AuthManager:
                         "is_admin": True,
                         "password_hash": hashed_password,
                         "created_at": datetime.now().isoformat(),
-                        "last_login": None
+                        "last_login": None,
+                        "currency": "S/", # Default currency
+                        "phone_number": "" # Default empty phone number
                     }
                 }
             }
@@ -154,7 +156,17 @@ class AuthManager:
             return True
         
         return False
-
+    
+    def update_user_settings(self, email: str, business_name: str, currency: str, phone_number: str) -> bool:
+        """Actualizar la configuración de negocio de un usuario."""
+        email = email.lower()
+        if email in self.users["users"]:
+            self.users["users"][email]["business_name"] = business_name.strip()
+            self.users["users"][email]["currency"] = currency
+            self.users["users"][email]["phone_number"] = phone_number.strip()
+            self._save_users()
+            return True
+        return False
 def check_authentication():
     """Verificar autenticación y mostrar login con contraseña"""
     auth = AuthManager()
@@ -167,22 +179,40 @@ def check_authentication():
     if not st.session_state.authenticated:
         st.markdown('''
         <style>
+        /* General body styling */
+        body {
+            background-color: #013366; /* Dark Blue background */
+        }
+        .stApp {
+            background-color: #013366; /* Dark Blue background for Streamlit app */
+        }
         .login-container {
             max-width: 450px;
-            margin: 0 auto; /* This keeps the form centered and constrained */
+            margin: 2rem auto; /* Centered with some top/bottom margin */
+            padding: 2.5rem;
+            background-color: #013366; /* Dark blue background to blend with body */
+            border-radius: 12px;
+            box-shadow: none; /* Remove shadow as it's blending */
         }
         .login-header {
             text-align: center;
-            margin-bottom: 2rem; /* This will now create space between title and card */
+            margin-bottom: 2rem;
+            color: #013366; /* Dark blue for header text */
         }
         .login-header h1 {
-            font-size: 2.2rem;
-            color: #2c3e50;
+            font-size: 2.5rem;
+            color: white; /* Changed to white */
             margin-bottom: 0.5rem;
         }
         .login-header p {
-            color: #7f8c8d;
+            color: white; /* Changed to white */
             font-size: 1.1rem;
+        }
+        .login-header .company-branding {
+            color: #fe933a; /* Orange for company branding */
+            font-size: 0.9rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
         }
         .login-footer {
             text-align: center;
@@ -193,19 +223,44 @@ def check_authentication():
             font-size: 0.9rem;
         }
         .login-footer a {
-            color: #3498db;
+            color: #01bfff; /* Light blue for links */
             text-decoration: none;
         }
         .login-footer a:hover {
             text-decoration: underline;
+        }
+        /* Streamlit button styling */
+        .stButton > button {
+            background-color: #fe933a; /* Orange for buttons */
+            color: white;
+            border-radius: 8px;
+            padding: 0.75rem 1.5rem;
+            font-weight: bold;
+            border: none;
+            transition: background-color 0.3s ease;
+        }
+        .stButton > button:hover {
+            background-color: #ff6f00; /* Brighter orange on hover */
+            color: white;
+        }
+        /* Input field styling */
+        .stTextInput > div > div > input {
+            border-radius: 8px;
+            border: 1px solid #cccccc;
+            padding: 0.75rem 1rem;
+        }
+        .stTextInput > label {
+            color: white; /* Changed to white */
+            font-weight: bold;
         }
         </style>
         ''', unsafe_allow_html=True)
         
         st.markdown('''
         <div class="login-header">
-            <h1>CatalogPro Enhanced</h1>
+            <h1>CatalogPro</h1>
             <p>Acceso Empresarial</p>
+            <p class="company-branding">by Antay Perú</p>
         </div>
         ''', unsafe_allow_html=True)
 

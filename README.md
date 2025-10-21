@@ -1,4 +1,4 @@
-# 📋 CATALOGPRO v1.1 - RESUMEN EJECUTIVO FINAL
+# 📋 CATALOGPRO - RESUMEN EJECUTIVO FINAL
 
 ## 🎯 QUÉ ES
 **Aplicación web que convierte archivos Excel/Google Sheets en catálogos digitales profesionales para dueños de negocio.**
@@ -126,12 +126,10 @@ streamlit run main.py
 - [x] **Filtros avanzados** (búsqueda, precio, unidad)
 - [x] **Vista previa** para dueño de negocio
 - [x] **Selección productos** para emails específicos
-
-### 🔄 **Mejoras Futuras (v1.2):**
-- [ ] Múltiples plantillas de diseño
-- [ ] Categorización de productos  
-- [ ] Analytics de uso
-- [ ] API REST básica
+- [x] Múltiples plantillas de diseño
+- [x] Categorización de productos  
+- [x] Analytics de uso
+- [x] API REST básica
 
 ---
 
@@ -182,9 +180,9 @@ Data Layer + Cache (Model)
 ```
 
 ### **Clases Principales:**
-- **EnhancedCatalogApp:** Controller principal
+- **CatalogProApp:** Controller principal
 - **DataHandler + DataCleaner:** Procesamiento datos
-- **EnhancedPDFExporter:** Generación PDF con imágenes  
+- **PDFExporter:** Generación PDF con imágenes  
 - **HTMLExporter:** Catálogos web responsive
 - **SimpleEmailMarketing:** Email sin SMTP
 - **ImageManager:** Caché y optimización imágenes
@@ -259,6 +257,5 @@ Data Layer + Cache (Model)
 ---
 
 **Fecha:** 18 de Julio, 2025  
-**Versión:** v1.1 Final  
-**Estado:** ✅ PRODUCTION READY  
-**Próxima versión:** v1.2 (Plantillas múltiples + Categorías)
+**Versión:** v1.2 Final (La versión definitiva se encuentra en `main.py` en la constante `__version__`)
+**Estado:** ✅ PRODUCTION READY
