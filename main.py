@@ -1156,12 +1156,13 @@ class EnhancedCatalogApp:
             st.subheader("PDF")
             if st.button("Generar PDF", key="gpdf"):
                 try:
-                    with st.spinner("..."):
+                    with st.spinner("Generando PDF..."):
                         pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
+                        st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp") 
                         st.session_state.exported = True
                         st.success("¡PDF generado con éxito!")
                 except Exception as e:
-                    st.error(f"❌ {str(e)}")
+                    st.error(f"Error al generar PDF: {str(e)}")
                     
         with c2:
             st.subheader("HTML")
