@@ -21,18 +21,16 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from auth import check_authentication, AuthManager
 import time
 
-__version__ = "1.2"
-
 # Configuración de la página
 st.set_page_config(
-    page_title="CatalogPro",
-    page_icon="assets/favicon_antay.png",
+    page_title="CatalogPro Enhanced - Catálogo Digital",
+    page_icon=" ",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # =============================================================================
-# CLASES AUXILIARES MEJORADAS v{__version__}
+# CLASES AUXILIARES MEJORADAS v1.2
 # =============================================================================
 
 class DataHandler:
@@ -194,7 +192,7 @@ class ImageManager:
         return image
 
 class CatalogGenerator:
-    """Clase para generar catálogos visuales de productos - MEJORADA v{__version__}"""
+    """Clase para generar catálogos visuales de productos - MEJORADA v1.2"""
     
     def __init__(self):
         self.image_manager = ImageManager()
@@ -268,9 +266,35 @@ class EnhancedPDFExporter:
     def __init__(self):
         self.styles = getSampleStyleSheet()
         self.image_manager = ImageManager()
+        self.business_name_for_footer = ""
+        self.phone_number_for_footer = ""
+        self.email_for_footer = ""
+
+    def _add_footer(self, canvas, doc):
+        canvas.saveState()
+        canvas.setFont('Helvetica', 9)
+        canvas.setFillColor(colors.HexColor('#7f8c8d'))
         
-    def generate_pdf_with_images(self, df, business_name, currency):
+        # Page number
+        page_number_text = f"Página {doc.page}"
+        canvas.drawRightString(A4[0] - 50, 40, page_number_text)
+        
+        # Contact info
+        contact_info = self.business_name_for_footer
+        if self.phone_number_for_footer:
+            contact_info += f" | Tel: {self.phone_number_for_footer}"
+        if self.email_for_footer:
+            contact_info += f" | Email: {self.email_for_footer}"
+        
+        canvas.drawString(50, 40, contact_info)
+        
+        canvas.restoreState()
+
+    def generate_pdf_with_images(self, df, business_name, currency, phone_number, user_email):
         """Generar PDF del catálogo con imágenes de productos"""
+        self.business_name_for_footer = business_name
+        self.phone_number_for_footer = phone_number
+        self.email_for_footer = user_email
         buffer = io.BytesIO()
         
         doc = SimpleDocTemplate(
@@ -282,12 +306,56 @@ class EnhancedPDFExporter:
             bottomMargin=50
         )
         
+        def first_page_template(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.HexColor('#7f8c8d'))
+            
+            # Page number
+            page_number_text = f"Página {doc.page}"
+            canvas.drawRightString(A4[0] - 50, 40, page_number_text)
+            
+            # Contact info
+            contact_info = self.business_name_for_footer
+            if self.phone_number_for_footer:
+                contact_info += f" | Tel: {self.phone_number_for_footer}"
+            if self.email_for_footer:
+                contact_info += f" | Email: {self.email_for_footer}"
+            
+            canvas.drawString(50, 40, contact_info)
+            
+            # Adjust top margin for first page
+            doc.topMargin = 30
+            canvas.restoreState()
+
+        def later_pages_template(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 9)
+            canvas.setFillColor(colors.HexColor('#7f8c8d'))
+            
+            # Page number
+            page_number_text = f"Página {doc.page}"
+            canvas.drawRightString(A4[0] - 50, 40, page_number_text)
+            
+            # Contact info
+            contact_info = self.business_name_for_footer
+            if self.phone_number_for_footer:
+                contact_info += f" | Tel: {self.phone_number_for_footer}"
+            if self.email_for_footer:
+                contact_info += f" | Email: {self.email_for_footer}"
+            
+            canvas.drawString(50, 40, contact_info)
+            
+            # Restore default top margin for later pages
+            doc.topMargin = 50
+            canvas.restoreState()
+        
         story = []
         story.extend(self._create_enhanced_header(business_name))
         story.extend(self._create_enhanced_catalog_info(df, currency))
         story.extend(self._create_enhanced_product_cards(df, currency))
         
-        doc.build(story)
+        doc.build(story, onFirstPage=first_page_template, onLaterPages=later_pages_template)
         buffer.seek(0)
         return buffer.getvalue()
         
@@ -311,25 +379,42 @@ class EnhancedPDFExporter:
             name='EnhancedTitle',
             parent=self.styles['Title'],
             fontSize=28,
-            spaceAfter=25,
-            alignment=TA_CENTER,
+            spaceAfter=5,
+            alignment=TA_LEFT,
             textColor=colors.HexColor('#2c3e50'),
             fontName='Helvetica-Bold'
         )
         
+        # Custom title or default business name
+        title_text = st.session_state.get('pdf_custom_title') or business_name
+
+        # Dynamic subtitle or custom subtitle
+        if st.session_state.get('pdf_custom_subtitle'):
+            subtitle_text = st.session_state.get('pdf_custom_subtitle')
+        else:
+            now = datetime.now()
+            try:
+                import locale
+                locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
+            except:
+                pass # Fallback to default locale if Spanish is not available
+            month_name = now.strftime("%B").capitalize()
+            year = now.year
+            subtitle_text = f"Catálogo Edición {month_name} {year}"
+
         subtitle_style = ParagraphStyle(
             name='EnhancedSubtitle',
             parent=self.styles['Heading2'],
             fontSize=16,
-            spaceAfter=30,
-            alignment=TA_CENTER,
+            spaceAfter=10,
+            alignment=TA_LEFT,
             textColor=colors.HexColor('#7f8c8d'),
             fontName='Helvetica'
         )
         
-        story.append(Paragraph(business_name, title_style))
-        story.append(Paragraph("Catálogo de Productos Profesional", subtitle_style))
-        story.append(Spacer(1, 10))
+        story.append(Paragraph(title_text, title_style))
+        story.append(Paragraph(subtitle_text, subtitle_style))
+        story.append(Spacer(1, 5))
         
         return story
         
@@ -364,59 +449,51 @@ class EnhancedPDFExporter:
         """Crear tarjetas de productos mejoradas"""
         story = []
         
-        products_per_page = 6
+        columns = st.session_state.get('pdf_columns', 2)
         total_products = len(df)
         
-        for page_start in range(0, total_products, products_per_page):
-            page_end = min(page_start + products_per_page, total_products)
-            page_products = df.iloc[page_start:page_end]
+        product_data = []
+        row_data = []
+        col_width = (A4[0] - 100) / columns
+        for i in range(total_products):
+            product = df.iloc[i]
+            product_cell_flowables = self._create_enhanced_product_cell(product, currency, col_width)
+            row_data.append(product_cell_flowables)
             
-            product_data = []
-            for i in range(0, len(page_products), 2):
-                row_data = []
-                
-                product1 = page_products.iloc[i]
-                product1_cell = self._create_enhanced_product_cell(product1, currency)
-                row_data.append(product1_cell)
-                
-                if i + 1 < len(page_products):
-                    product2 = page_products.iloc[i + 1]
-                    product2_cell = self._create_enhanced_product_cell(product2, currency)
-                    row_data.append(product2_cell)
-                else:
-                    row_data.append("")
-                
+            if (i + 1) % columns == 0:
                 product_data.append(row_data)
+                row_data = []
+        
+        if row_data: # Add remaining cells
+            while len(row_data) < columns:
+                row_data.append("")
+            product_data.append(row_data)
+
+        if product_data:
+            products_table = Table(product_data, colWidths=[col_width] * columns, splitByRow=1)
+            products_table.setStyle(TableStyle([
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 15),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 15),
+                ('TOPPADDING', (0, 0), (-1, -1), 15),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 25),
+            ]))
             
-            if product_data:
-                products_table = Table(product_data, colWidths=[4*inch, 4*inch])
-                products_table.setStyle(TableStyle([
-                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 15),
-                    ('RIGHTPADDING', (0, 0), (-1, -1), 15),
-                    ('TOPPADDING', (0, 0), (-1, -1), 15),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 25),
-                    ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#ecf0f1')),
-                ]))
-                
-                story.append(products_table)
-                story.append(Spacer(1, 20))
-                
-                if page_end < total_products:
-                    story.append(PageBreak())
+            story.append(products_table)
         
         return story
         
-    def _create_enhanced_product_cell(self, product, currency):
+    def _create_enhanced_product_cell(self, product, currency, col_width):
         """Crear celda de producto mejorada"""
         product_image = None
         try:
             image = self.image_manager.download_image(product['ImagenURL'], max_size=(300, 300))
             img_buffer = io.BytesIO()
-            image.save(img_buffer, format='PNG')
+            image.save(img_buffer, format='JPEG', quality=85)
             img_buffer.seek(0)
-            product_image = RLImage(img_buffer, width=2*inch, height=2*inch)
+            image_width = col_width * 0.8 # Use 80% of cell width for the image
+            product_image = RLImage(img_buffer, width=image_width, height=image_width)
         except:
             pass
         
@@ -462,25 +539,18 @@ class EnhancedPDFExporter:
         cell_data = []
         
         if product_image:
-            cell_data.append([product_image])
-        
-        cell_data.append([Paragraph(f"<b>{product['Producto']}</b>", title_style)])
+            cell_data.append(product_image)
+            cell_data.append(Spacer(1, 8))
+
+        cell_data.append(Paragraph(f"<b>{product['Producto']}</b>", title_style))
         
         description = str(product['Descripción'])[:80] + ('...' if len(str(product['Descripción'])) > 80 else '')
-        cell_data.append([Paragraph(f"<i>{description}</i>", desc_style)])
+        cell_data.append(Paragraph(f"<i>{description}</i>", desc_style))
         
-        cell_data.append([Paragraph(f"{currency} {product['Precio']:.2f}", price_style)])
-        cell_data.append([Paragraph(f"Por {product['Unidad']}", unit_style)])
+        cell_data.append(Paragraph(f"{currency} {product['Precio']:.2f}", price_style))
+        cell_data.append(Paragraph(f"Por {product['Unidad']}", unit_style))
         
-        inner_table = Table(cell_data, colWidths=[3.5*inch])
-        inner_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-        ]))
-        
-        return inner_table
+        return cell_data
 
 class SimpleEmailMarketing:
     """Clase simplificada para email marketing usando mailto:"""
@@ -648,7 +718,7 @@ class HTMLExporter:
         
         return cards_html
     # =============================================================================
-# PARTE 2: APLICACIÓN PRINCIPAL v{__version__} - COPIAR DESPUÉS DE PARTE 1
+# PARTE 2: APLICACIÓN PRINCIPAL v1.2 - COPIAR DESPUÉS DE PARTE 1
 # =============================================================================
 
 # NOTA IMPORTANTE: Este código va DESPUÉS de toda la Parte 1 en main.py
@@ -659,8 +729,8 @@ class HTMLExporter:
 # CLASE PRINCIPAL MEJORADA
 # =============================================================================
 
-class CatalogProApp:
-    """Aplicación principal con mejoras UX/UI v{__version__}"""
+class EnhancedCatalogApp:
+    """Aplicación principal con mejoras UX/UI v1.2"""
     
     def __init__(self):
         self.data_handler = DataHandler()
@@ -688,8 +758,7 @@ class CatalogProApp:
     def run(self):
         # PRIMERO: Verificar autenticación
         auth = check_authentication()
-        self.auth_manager = auth # Assign to instance attribute
-        st.session_state.auth_manager = auth # Also keep in session_state for other uses
+        st.session_state.auth_manager = auth
         
         # Calcular is_admin una sola vez
         is_admin = False
@@ -701,25 +770,6 @@ class CatalogProApp:
         self.render_header()
         self.render_sidebar(is_admin)
         self.render_main_content(is_admin)
-
-    def _update_user_setting(self, setting_key, new_value):
-        """Helper to update a single user setting and save it."""
-        if st.session_state.authenticated and st.session_state.user_email:
-            user_email = st.session_state.user_email
-            user_info = st.session_state.user_info
-
-            # Update the specific setting in user_info
-            user_info[setting_key] = new_value
-            st.session_state.user_info = user_info # Update session state
-
-            # Call AuthManager to persist the change
-            self.auth_manager.update_user_settings(
-                user_email,
-                user_info.get('business_name', ''),
-                user_info.get('currency', 'S/'),
-                user_info.get('phone_number', '')
-            )
-            st.session_state.auth_manager = self.auth_manager # Update auth_manager in session state
         
     def setup_styles(self):
         """Estilos CSS mejorados"""
@@ -889,54 +939,25 @@ class CatalogProApp:
         """, unsafe_allow_html=True)
         
     def render_header(self):
-        st.markdown(f"""
+        st.markdown("""
         <div class="main-header">
-            <h1>CatalogPro</h1>
-            <p>Tu solución profesional para catálogos digitales</p>
-            <p>by Antay Perú</p>
-            <span class="feature-badge">v{__version__}</span>
+            <h1>CatalogPro Enhanced</h1>
+            <p>Catálogos profesionales mejorados</p>
+            <span class="feature-badge">v1.2</span>
             <span class="feature-badge">PDF</span>
             <span class="easy-badge">Email Fácil</span>
+            <span class="ux-badge">UX Mejorada</span>
         </div>
         """, unsafe_allow_html=True)
     
     def render_sidebar(self, is_admin):
         st.sidebar.header("📊 Configuración")
         
-        # Get user info from session state
-        user_info = st.session_state.user_info if st.session_state.authenticated else {}
-
         with st.sidebar.expander("🏢 Negocio", expanded=True):
-            # Business Name
-            current_biz_name = user_info.get('business_name', 'Mi Empresa')
-            business_name = st.text_input(
-                "Nombre", 
-                value=current_biz_name, 
-                key="biz",
-                on_change=lambda: self._update_user_setting('business_name', st.session_state.biz)
-            )
-
-            # Currency
-            currencies = ["S/", "$", "€", "£"]
-            current_currency = user_info.get('currency', 'S/')
-            currency_index = currencies.index(current_currency) if current_currency in currencies else 0
-            currency = st.selectbox(
-                "Moneda", 
-                currencies, 
-                index=currency_index, 
-                key="cur",
-                on_change=lambda: self._update_user_setting('currency', st.session_state.cur)
-            )
-
-            # Phone Number
-            current_phone_number = user_info.get('phone_number', '')
-            phone_number = st.text_input(
-                "Número de WhatsApp", 
-                value=current_phone_number, 
-                placeholder="Ej: 51987654321", 
-                key="phone",
-                on_change=lambda: self._update_user_setting('phone_number', st.session_state.phone)
-            )
+            default_biz_name = st.session_state.user_info.get('business_name', 'Mi Empresa')
+            business_name = st.text_input("Nombre", default_biz_name, key="biz")
+            currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], key="cur")
+            phone_number = st.text_input("Número de WhatsApp", placeholder="Ej: 51987654321", key="phone")
 
         with st.sidebar.expander("🎨 Diseño", expanded=False):
             columns = st.slider("Columnas", 1, 4, 3, key="col")
@@ -946,8 +967,11 @@ class CatalogProApp:
                 st.session_state.logo = uploaded_logo
             else:
                 st.session_state.logo = None
+            
+            st.session_state.pdf_custom_title = st.text_input("Título PDF", key="pdf_title")
+            st.session_state.pdf_custom_subtitle = st.text_input("Subtítulo PDF", key="pdf_subtitle")
+            st.session_state.pdf_columns = st.slider("Columnas PDF", 1, 3, 2, key="pdf_col")
         
-        # Update session state with current values (even if not changed, for consistency)
         st.session_state.business_name = business_name
         st.session_state.currency = currency
         st.session_state.columns = columns
@@ -1176,7 +1200,7 @@ class CatalogProApp:
             if len(filtered) < len(df):
                 if st.button(f"Exportar {len(filtered)} Filtrados", key="exf"):
                     with st.spinner("..."):
-                        pdf = self.pdf_exporter.generate_pdf_with_images(filtered, st.session_state.business_name, st.session_state.currency)
+                        pdf = self.pdf_exporter.generate_pdf_with_images(filtered, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'), st.session_state.get('user_email'))
                         st.download_button("Descargar", pdf, f"filtrado_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlf")
                         st.success("¡Email listo en tu cliente de correo!")
                 st.markdown("---")
@@ -1208,13 +1232,13 @@ class CatalogProApp:
             st.subheader("PDF")
             if st.button("Generar PDF", key="gpdf"):
                 try:
-                    with st.spinner("Generando PDF..."):
-                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
-                        st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp") 
+                    with st.spinner("..."):
+                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'), st.session_state.get('user_email'))
                         st.session_state.exported = True
                         st.success("¡PDF generado con éxito!")
+                        st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp")
                 except Exception as e:
-                    st.error(f"Error al generar PDF: {str(e)}")
+                    st.error(f"❌ {str(e)}")
                     
         with c2:
             st.subheader("HTML")
@@ -1258,7 +1282,7 @@ class CatalogProApp:
             if st.button("Descargar PDF", disabled=not to_email, key="pem"):
                 try:
                     with st.spinner("..."):
-                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency)
+                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'), st.session_state.get('user_email'))
                         st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlem")
                         st.success("¡PDF descargado con éxito!")
                 except Exception as e:
@@ -1535,5 +1559,5 @@ class CatalogProApp:
 # =============================================================================
 
 if __name__ == "__main__":
-    app = CatalogProApp()
+    app = EnhancedCatalogApp()
     app.run()
