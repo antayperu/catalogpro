@@ -157,13 +157,15 @@ class AuthManager:
         
         return False
     
-    def update_user_settings(self, email: str, business_name: str, currency: str, phone_number: str) -> bool:
-        """Actualizar la configuración de negocio de un usuario."""
+    def update_user_settings(self, email: str, **settings) -> bool:
+        """Actualizar la configuración de un usuario."""
         email = email.lower()
         if email in self.users["users"]:
-            self.users["users"][email]["business_name"] = business_name.strip()
-            self.users["users"][email]["currency"] = currency
-            self.users["users"][email]["phone_number"] = phone_number.strip()
+            for key, value in settings.items():
+                if isinstance(value, str):
+                    self.users["users"][email][key] = value.strip()
+                else:
+                    self.users["users"][email][key] = value
             self._save_users()
             return True
         return False

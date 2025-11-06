@@ -434,10 +434,7 @@ class EnhancedPDFExporter:
         )
         
         info_text = f"""
-        <b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}<br/>
-        <b>Total:</b> {len(df)} productos<br/>
-        <b>Moneda:</b> {currency}<br/>
-        <b>Promedio:</b> {currency} {df['Precio'].mean():.2f}
+        <b>Fecha:</b> {datetime.now().strftime('%d/%m/%Y')}
         """
         
         story.append(Paragraph(info_text, info_style))
@@ -953,11 +950,31 @@ class EnhancedCatalogApp:
     def render_sidebar(self, is_admin):
         st.sidebar.header("📊 Configuración")
         
+        auth = st.session_state.auth_manager
+        user_email = st.session_state.user_email
+        user_info = st.session_state.user_info
+
         with st.sidebar.expander("🏢 Negocio", expanded=True):
-            default_biz_name = st.session_state.user_info.get('business_name', 'Mi Empresa')
-            business_name = st.text_input("Nombre", default_biz_name, key="biz")
-            currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], key="cur")
-            phone_number = st.text_input("Número de WhatsApp", placeholder="Ej: 51987654321", key="phone")
+            business_name = st.text_input(
+                "Nombre", 
+                user_info.get('business_name', 'Mi Empresa'), 
+                key="biz",
+                on_change=lambda: auth.update_user_settings(user_email, business_name=st.session_state.biz)
+            )
+            currency = st.selectbox(
+                "Moneda", 
+                ["S/", "$", "€", "£"], 
+                index=["S/", "$", "€", "£"].index(user_info.get('currency', 'S/')),
+                key="cur",
+                on_change=lambda: auth.update_user_settings(user_email, currency=st.session_state.cur)
+            )
+            phone_number = st.text_input(
+                "Número de WhatsApp", 
+                user_info.get('phone_number', ''),
+                placeholder="Ej: 51987654321", 
+                key="phone",
+                on_change=lambda: auth.update_user_settings(user_email, phone_number=st.session_state.phone)
+            )
 
         with st.sidebar.expander("🎨 Diseño", expanded=False):
             columns = st.slider("Columnas", 1, 4, 3, key="col")
@@ -968,20 +985,27 @@ class EnhancedCatalogApp:
             else:
                 st.session_state.logo = None
             
-            st.session_state.pdf_custom_title = st.text_input("Título PDF", key="pdf_title")
-            st.session_state.pdf_custom_subtitle = st.text_input("Subtítulo PDF", key="pdf_subtitle")
+            pdf_custom_title = st.text_input(
+                "Título PDF", 
+                user_info.get('pdf_custom_title', ''), 
+                key="pdf_title",
+                on_change=lambda: auth.update_user_settings(user_email, pdf_custom_title=st.session_state.pdf_title)
+            )
+            pdf_custom_subtitle = st.text_input(
+                "Subtítulo PDF", 
+                user_info.get('pdf_custom_subtitle', ''), 
+                key="pdf_subtitle",
+                on_change=lambda: auth.update_user_settings(user_email, pdf_custom_subtitle=st.session_state.pdf_subtitle)
+            )
             st.session_state.pdf_columns = st.slider("Columnas PDF", 1, 3, 2, key="pdf_col")
         
         st.session_state.business_name = business_name
         st.session_state.currency = currency
         st.session_state.columns = columns
         st.session_state.phone_number = phone_number
-        
-        if 'df' in st.session_state and st.session_state.df is not None:
-            with st.sidebar.expander("📈 Stats", expanded=True):
-                df = st.session_state.df
-                st.metric("Total", len(df))
-                st.metric("Promedio", f"{currency} {df['Precio'].mean():.2f}")
+        st.session_state.pdf_custom_title = pdf_custom_title
+        st.session_state.pdf_custom_subtitle = pdf_custom_subtitle
+
                 
     def render_main_content(self, is_admin):
         if is_admin:
@@ -1231,14 +1255,19 @@ class EnhancedCatalogApp:
         with c1:
             st.subheader("PDF")
             if st.button("Generar PDF", key="gpdf"):
-                try:
-                    with st.spinner("..."):
-                        pdf = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'), st.session_state.get('user_email'))
-                        st.session_state.exported = True
-                        st.success("¡PDF generado con éxito!")
-                        st.download_button("Descargar PDF", pdf, f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf", "application/pdf", key="dlp")
-                except Exception as e:
-                    st.error(f"❌ {str(e)}")
+                with st.spinner("Generando PDF..."):
+                    pdf_data = self.pdf_exporter.generate_pdf_with_images(df, st.session_state.business_name, st.session_state.currency, st.session_state.get('phone_number'), st.session_state.get('user_email'))
+                    st.session_state.pdf_data = pdf_data
+                st.success("¡PDF generado con éxito!")
+            
+            if 'pdf_data' in st.session_state and st.session_state.pdf_data is not None:
+                st.download_button(
+                    label="Descargar PDF",
+                    data=st.session_state.pdf_data,
+                    file_name=f"catalogo_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    key="dlp"
+                )
                     
         with c2:
             st.subheader("HTML")
