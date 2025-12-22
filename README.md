@@ -1,261 +1,99 @@
-# 📋 CATALOGPRO - RESUMEN EJECUTIVO FINAL
+# � CatalogPro Enterprise (Antay Factory)
 
-## 🎯 QUÉ ES
-**Aplicación web que convierte archivos Excel/Google Sheets en catálogos digitales profesionales para dueños de negocio.**
-
-**Usuario:** Dueños de negocio (NO clientes finales)  
-**Input:** Excel con productos + imágenes  
-**Output:** PDF profesional + HTML responsive + Email marketing  
+**Versión Actual:** v1.2.5
+**Fecha:** 21 de Diciembre, 2025
+**Estado:** 🟢 Estable (Production Ready)
+> **Ticket Control:** El correlativo oficial y detalle histórico vive en [`docs/TICKETS.md`](docs/TICKETS.md).
 
 ---
 
-## ✅ PAQUETE FINAL - 3 ARCHIVOS ESENCIALES
+## 📋 Resumen del Proyecto
+CatalogPro es una aplicación de generación de catálogos empresariales optimizada para manejar grandes volúmenes de datos (800+ SKUs) con estándares de rendimiento y UX corporativos.
 
-### **1. `main.py`** - Código Principal Definitivo
-- ✅ **PDF con imágenes** profesional (2 productos por fila)
-- ✅ **Email simplificado** (mailto: - sin configuración SMTP)
-- ✅ **HTML responsive** completo  
-- ✅ **Vista previa** renombrada para clarity
-- ✅ **WhatsApp integration** funcional
-- ✅ **Logo upload** y branding empresarial
-
-### **2. `requirements.txt`** - Dependencias Finales
-- Streamlit 1.28+ (Framework)
-- Pandas 2.1+ (Datos)  
-- Pillow 10.0+ (Imágenes)
-- ReportLab 4.0+ (PDF)
-- OpenPyXL 3.1+ (Excel)
-- Requests 2.31+ (HTTP)
-
-### **3. Este Resumen** - Documentación Ejecutiva
-- Especificaciones funcionales
-- Criterios de calidad 
-- Guía de implementación
+**Principios de Fábrica:**
+- **Escalabilidad:** Renderizado paginado y lazy loading.
+- **Optimización:** Motores concurrentes para PDF e imágenes.
+- **Robustez:** Tolerancia a fallos de red y datos corruptos.
 
 ---
 
-## 🔄 FLUJO DE NEGOCIO REAL
-
-```
-1. DUEÑO: Tiene Excel con productos
-    ↓
-2. DUEÑO: Sube a CatalogPro
-    ↓  
-3. DUEÑO: Ve vista previa y configura
-    ↓
-4. DUEÑO: Genera PDF/HTML profesional
-    ↓
-5. DUEÑO: Envía a clientes por email/WhatsApp
-    ↓
-6. CLIENTES: Ven catálogo y compran
-```
+## 🤖 Reglas Operativas del Agente (Strict Mode)
+1.  **Cero Bucles UI:** Máximo 2 intentos de validación por URL. Si falla, reportar y esperar.
+2.  **No Login:** El agente **NUNCA** intentará adivinar credenciales ni esquivar logins.
+3.  **Procesos Limpios:** Se evitará dejar múltiples puertos abiertos (8501-8510).
+4.  **Validación Asistida:** Se priorizará el análisis de código estático y la ejecución de scripts `verify_*.py`, delegando la validación visual final al Humano.
 
 ---
 
-## 📊 ESTRUCTURA DE DATOS REQUERIDA
+## 🎟️ Historial de Cambios (Changelog)
 
-```csv
-ImagenURL,Producto,Descripción,Unidad,Precio
-https://ejemplo.com/img1.jpg,Laptop Dell,Core i5 8GB RAM,Unidad,1299.99
-https://ejemplo.com/img2.jpg,Mouse Wireless,Ergonómico recargable,Unidad,29.90
-```
-
-**Columnas obligatorias:** ImagenURL, Producto, Descripción, Unidad, Precio
-
----
-
-## 🎨 ESTÁNDARES DE CALIDAD PROFESIONAL
-
-### **PDF Output:**
-- **Layout:** 2 productos por fila, imágenes 1.5" x 1.5"
-- **Tipografía:** Jerarquía clara, colores corporativos
-- **Branding:** Logo integrado, nombre empresa
-- **Calidad:** Comparable a Zara, IKEA, Apple
-
-### **HTML Output:**  
-- **Responsive:** Mobile-first, 3 breakpoints
-- **Performance:** < 3 segundos carga
-- **Design:** Gradientes modernos, hover effects
-- **SEO:** Meta tags, estructura semántica
-
-### **Email Marketing:**
-- **Simplicidad:** mailto: - sin configuración SMTP
-- **Templates:** Pre-formateados profesionales
-- **Attachments:** PDF generado automáticamente
-- **Compatibility:** Gmail, Outlook, Apple Mail
+| Versión | Ticket ID | Descripción | Estado |
+|---|---|---|---|
+| **v1.2.5** | **CP-UX-PDF-006** | **PDF Pro Layout:** Diseño corporativo, imágenes fijas, cero 'nan', secciones unificadas. | ✅ Desplegado |
+| **v1.2.4** | **CP-PERF-004** | **Caché Híbrido (Best Effort):** Persistencia en disco de thumbnails para acelerar F5. Fallback automático a RAM si falla escritura. | ✅ Desplegado |
+| **v1.2.3** | **CP-UX-UI-003** | **Limpieza UI Exportación:** Unificación de botones, feedback de descarga condicional y estadísticas visibles. | ✅ Desplegado |
+| **v1.2.2** | **CP-UX-PERF-002** | **Preview Ultra-Rápido:** Paginación (24 items), Lazy Load de imágenes y Toggle ON/OFF. Preview < 3s. | ✅ Desplegado |
+| **v1.2.1** | **CP-PERF-001** | **Motor PDF Optimizado:** Descarga paralela (ThreadPool), Cache de sesión y Rollback legacy. | ✅ Desplegado |
+| v1.0.0 | - | Versión inicial funcional. | 📦 Legacy |
 
 ---
 
-## 🚀 INSTALACIÓN Y USO
+## 🚦 Decisiones de Arquitectura Vigentes
 
-### **Setup Rápido:**
-```bash
-# Crear proyecto
-mkdir CatalogPro
-cd CatalogPro
+### 1. Performance & UX
+- **Preview:** Siempre paginada (Default: 24 items). Carga de imágenes diferida (Lazy). Opción "Solo Texto" para velocidad máxima.
+- **Exportación PDF:** 
+    - **Motor:** Concurrente (`ThreadPoolExecutor` max_workers=20).
+    - **UX:** Botón único "Generar". Descarga disponible solo post-generación.
+    - **Desacople:** La exportación no depende de que el preview haya cargado las imágenes.
+- **Caché Híbrido:** 
+    - **L1 Memoria:** `st.session_state` (Rápido, se borra al cerrar tab).
+    - **L2 Disco (Best Effort):** `.img_cache/` guardando thumbnails. (Persiste tras F5).
+    - **Límite:** Max 1000 archivos con limpieza automática. Limitado a thumbnails (no originales).
 
-# Crear entorno virtual
-python -m venv venv
-venv\Scripts\activate  # Windows
-source venv/bin/activate  # Mac/Linux
-
-# Instalar dependencias
-pip install -r requirements.txt
-
-# Ejecutar aplicación
-streamlit run main.py
-```
-
-### **Uso Básico:**
-1. **Cargar Datos** → Excel/Google Sheets
-2. **Vista Previa** → Revisar catálogo (dueño)
-3. **Exportar** → PDF/HTML profesional
-4. **Email Fácil** → Envío simplificado
+### 2. Manejo de Datos
+- **Imágenes:** No se almacenan blobs gigantes en Session State innecesariamente, solo lo visible o lo exportado.
+- **Cache:** `st.session_state` persistente para imágenes descargadas (Warm Cache).
 
 ---
 
-## 📱 FUNCIONALIDADES CLAVE
+## 🧪 Cómo Probar (Test Plan Básico)
 
-### ✅ **Implementado y Funcionando:**
-- [x] **Carga multi-fuente** (Excel + Google Sheets)
-- [x] **PDF con imágenes** profesional  
-- [x] **HTML responsive** completo
-- [x] **Email marketing** simplificado (mailto:)
-- [x] **WhatsApp integration** automática
-- [x] **Branding empresarial** (logo + colores)
-- [x] **Filtros avanzados** (búsqueda, precio, unidad)
-- [x] **Vista previa** para dueño de negocio
-- [x] **Selección productos** para emails específicos
-- [x] Múltiples plantillas de diseño
-- [x] Categorización de productos  
-- [x] Analytics de uso
-- [x] API REST básica
+### Requisitos
+- Dataset de prueba: `ProductSample_Large.xlsx` (800 productos).
 
----
-
-## 🎯 CASOS DE USO VALIDADOS
-
-### **Caso 1: Tienda de Ropa**
-- Input: 50 productos en Excel
-- Proceso: Upload → Preview → PDF → WhatsApp  
-- Resultado: +30% ventas por imagen profesional
-
-### **Caso 2: Restaurante**  
-- Input: Google Sheets con menú
-- Proceso: URL → Logo → HTML responsive
-- Resultado: Menú digital actualizable
-
-### **Caso 3: Distribuidor B2B**
-- Input: 200 productos mayoristas
-- Proceso: Select products → Email → PDF adjunto
-- Resultado: Cotizaciones automatizadas
+### Pasos
+1.  **Iniciar App:** `streamlit run main.py`
+2.  **Validar Performance:**
+    - Cargar excel de 800 items.
+    - Verificar que el **Preview** carga en < 3 segundos (Página 1).
+    - Navegar a Página 2 (inmediato).
+3.  **Validar Exportación:**
+    - Ir a pestaña "Exportar".
+    - Clic en **"⚙️ Generar Nuevo PDF"** (Motor Optimizado activado).
+    - Tiempo esperado (Cold): < 90s.
+    - Tiempo esperado (Warm - 2da vez): < 10s.
+    - Verificar botón de descarga y estadísticas.
 
 ---
 
-## 📊 MÉTRICAS DE ÉXITO
+## 📊 Métricas de Rendimiento (Benchmark v1.2.2/3)
 
-### **ROI Empresarial:**
-- ⚡ **Tiempo:** 5 minutos vs 2-4 semanas
-- 💰 **Costo:** $0 vs $500-2,000 diseñador
-- 📈 **Ventas:** +20-30% imagen profesional  
-- 🔄 **Updates:** Instantáneo vs días
-
-### **Quality Benchmarks:**
-- ✅ **PDF:** Indistinguible de catálogos enterprise
-- ✅ **HTML:** 90+ Google PageSpeed score
-- ✅ **UX:** < 5 clics generar catálogo
-- ✅ **Compatibility:** 100% navegadores modernos
+| Escenario | Dataset | Tiempo Objetivo | Tiempo Real (Promedio) |
+|---|---|---|---|
+| **Carga Dataset** | 800 items | < 5s | ~2s |
+| **Preview (Pg 1)** | 800 items | < 3s | ~0.5s (Texto) / ~3s (Img) |
+| **PDF (Cold)** | 800 items | < 90s | ~65s (Varía según red) |
+| **PDF (Warm)** | 800 items | < 10s | ~4s |
 
 ---
 
-## 🔧 ARQUITECTURA TÉCNICA
-
-### **Patrón de Diseño:**
-```
-Streamlit UI (View)
-    ↓
-Business Logic Classes (Controller)  
-    ↓
-Data Layer + Cache (Model)
-```
-
-### **Clases Principales:**
-- **CatalogProApp:** Controller principal
-- **DataHandler + DataCleaner:** Procesamiento datos
-- **PDFExporter:** Generación PDF con imágenes  
-- **HTMLExporter:** Catálogos web responsive
-- **SimpleEmailMarketing:** Email sin SMTP
-- **ImageManager:** Caché y optimización imágenes
+## � Known Issues & Deuda Técnica
+1.  **Placeholders:** Las imágenes rotas se manejan, pero el placeholder visual podría ser más estético (CP-RES-005).
+2.  **Cache Disco:** Al reiniciar el servidor (F5), se pierde el cache de imágenes. Se requiere persistencia en disco (CP-PERF-004).
 
 ---
 
-## 🚨 DECISIONES CLAVE FINALES
-
-### **1. Email Simplificado (mailto:) vs SMTP**
-**Decisión:** mailto: por UX simplificada  
-**Razón:** Cero configuración vs complejidad técnica
-
-### **2. Vista Previa Renombrada**  
-**Antes:** "🛍️ Catálogo" (confuso)
-**Ahora:** "👀 Vista Previa" (claro que es para el dueño)
-
-### **3. Arquitectura Monolítica**
-**Decisión:** Todo en main.py (1000+ líneas)
-**Razón:** Simplicidad deployment vs modularidad
-
-### **4. In-Memory Cache**
-**Decisión:** Session state + dict cache
-**Razón:** Velocidad + cero configuración
-
----
-
-## ✅ ESTADO FINAL DEL PROYECTO
-
-### **🎉 READY FOR PRODUCTION**
-- ✅ **Código:** Robusto y mantenible
-- ✅ **Funcionalidad:** 100% especificaciones cumplidas
-- ✅ **Calidad:** Estándares enterprise  
-- ✅ **Documentación:** Completa y organizada
-- ✅ **Testing:** Manual validation exitosa
-
-### **🚀 DEPLOYMENT OPTIONS**
-1. **Streamlit Cloud** (Gratis, SSL incluido)
-2. **Heroku** (Control total)  
-3. **AWS/GCP** (Enterprise scale)
-
----
-
-## 📋 DOCUMENTACIÓN ORGANIZADA
-
-### **🗑️ IGNORAR** (Artifacts obsoletos):
-- `catalogpro_enhanced` (versión SMTP complicada)
-- `main_enhanced_direct` (duplicado)
-- `upgrade_guide` (histórico)
-- `documentation_structure` (propuesta, ya implementada)
-- Otros artifacts de documentación (redundantes)
-
-### **✅ USAR SOLO** (Paquete final):
-1. **`main_final`** → Tu código Python definitivo
-2. **`requirements_final`** → Dependencias exactas  
-3. **`project_summary_final`** → Este resumen ejecutivo
-
----
-
-## 🎯 PRÓXIMOS PASOS RECOMENDADOS
-
-### **Inmediatos:**
-1. **Copiar** los 3 archivos finales a tu proyecto local
-2. **Testing** con datos reales  
-3. **Deploy** a Streamlit Cloud
-4. **Feedback** usuarios reales
-
-### **Organizacional:**
-1. **Aplicar** estructura de "mini fábrica software"
-2. **Documentar** procesos para futuros proyectos
-3. **Establecer** estándares de calidad consistentes
-
----
-
-**Fecha:** 18 de Julio, 2025  
-**Versión:** v1.2 Final (La versión definitiva se encuentra en `main.py` en la constante `__version__`)
-**Estado:** ✅ PRODUCTION READY
+## 📅 Próximos Pasos (Backlog Recomendado)
+- **CP-PERF-004:** Cache de Imágenes en Disco (Persistencia entre sesiones).
+- **CP-RES-005:** Robustez avanzada y Placeholders estéticos.
