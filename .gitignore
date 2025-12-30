@@ -6,3 +6,5 @@ authorized_users.json
 *.log
 .DS_Store
 venv/
+.streamlit/secrets.toml
+

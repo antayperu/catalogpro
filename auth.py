@@ -15,7 +15,9 @@ class AuthManager:
     """Gestor de autenticación y usuarios"""
     
     def __init__(self):
-        self.auth_file = "authorized_users.json"
+        # FIX (CP-BUG-011): Use absolute path to ensure persistence across execution contexts
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        self.auth_file = os.path.join(base_dir, "authorized_users.json")
         self.admin_email = "admin@antayperu.com"
         self._ensure_auth_file_exists()
         self._load_users()

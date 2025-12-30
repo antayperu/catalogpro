@@ -3,16 +3,15 @@
 Este documento es la fuente de verdad para el correlativo de tickets y el historial de cambios detallado.
 
 ## 📌 Último Ticket Cerrado
-**ID:** `CP-UX-PDF-006`
-**ID:** `CP-UX-UI-009`
-**ID:** `CP-FEAT-007`
-**Fecha:** 22/12/2025
-**Versión:** v1.3.0
+**ID:** `CP-BUG-010`
+**Título:** Crash en Búsqueda "paneton" (Str Accessor Error)
+**Fecha:** 29/12/2025
+**Versión:** v1.3.1 - Hotfix
 
 ---
 
 ## 🏗️ Ticket en Curso
-*(Esperando Asignación)*
+*(Sin ticket activo)*
 
 --- 
 
@@ -42,6 +41,8 @@ Formato: `CP-{TIPO}-{###}`
 
 | ID | Tipo | Título | Versión | Estado | Fecha Cierre |
 |---|---|---|---|---|---|
+| **CP-BUG-010** | BUG | Crash en Búsqueda "paneton" (Str Accessor Error) | v1.3.1 | ✅ Cerrado | 29/12/2025 |
+| **CP-BUG-011** | BUG | Persistencia de Usuarios Admin (Ruta Relativa) | v1.3.1 | ✅ Cerrado | 29/12/2025 |
 | **CP-UX-PDF-006** | UX | PDF Pro Layout (Diseño Corp.) | v1.2.5 | ✅ Cerrado | 21/12/2025 |
 | **CP-PERF-004** | Perf | Caché de Imágenes en Disco (Best Effort) | v1.2.4 | ✅ Cerrado | 21/12/2025 |
 | **CP-UX-UI-003** | UI | Limpieza UI Exportación (Unificar Botones) | v1.2.3 | ✅ Cerrado | 21/12/2025 |

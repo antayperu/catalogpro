@@ -6,3 +6,5 @@ openpyxl
 requests
 numpy
 bcrypt
+
+notion-client

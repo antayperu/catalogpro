@@ -1658,6 +1658,9 @@ class EnhancedCatalogApp:
         st.session_state.phone_number = phone_number
         st.session_state.pdf_custom_title = pdf_custom_title
         st.session_state.pdf_custom_subtitle = pdf_custom_subtitle
+        
+        st.sidebar.markdown("---")
+        st.sidebar.caption("v1.3.1 (Hotfix) - 29/12/2025")
 
                 
     def render_main_content(self, is_admin):
@@ -1970,10 +1973,11 @@ class EnhancedCatalogApp:
 
             # Basic
             if search:
-                mask = filtered['Producto'].str.contains(search, case=False, na=False) | \
-                       filtered['Descripción'].str.contains(search, case=False, na=False)
+                # FIX (CP-BUG-010): Force string conversion to avoid AccessorError on numeric columns
+                mask = filtered['Producto'].astype(str).str.contains(search, case=False, na=False) | \
+                       filtered['Descripción'].astype(str).str.contains(search, case=False, na=False)
                 if 'Código' in filtered.columns:
-                     mask |= filtered['Código'].str.contains(search, case=False, na=False)
+                     mask |= filtered['Código'].astype(str).str.contains(search, case=False, na=False)
                 filtered = filtered[mask]
             
             if not filtered.empty:
@@ -2359,10 +2363,11 @@ class EnhancedCatalogApp:
             3.  Pega esa URL en tu archivo Excel o Google Sheets. Si la imagen se ve en el navegador al pegar la URL, ¡funcionará en CatalogPro!
             """)
 
-        with st.expander("¿Qué es el usuario 'admin@antayperu.com'?"):
-            st.markdown("""
             Es el **usuario raíz** o **super-administrador** del sistema. Se crea por defecto para asegurar que siempre haya una forma de acceder y gestionar la aplicación. Por seguridad, este usuario no puede ser eliminado ni se le pueden quitar los permisos de administrador desde la interfaz.
             """)
+            
+        st.markdown("---")
+        st.caption("CatalogPro v1.3.1 (Hotfix) - 29/12/2025 | Developed by Antay Perú")
 
     def render_admin_panel(self):
         """Panel de administración de usuarios"""
