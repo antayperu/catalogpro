@@ -8,3 +8,4 @@ authorized_users.json
 venv/
 .streamlit/secrets.toml
 
+.img_cache/

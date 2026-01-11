@@ -5,7 +5,7 @@ from notion_client import Client
 
 # SECURE: Load from Streamlit secrets (local: .streamlit/secrets.toml, cloud: App Settings)
 NOTION_TOKEN = st.secrets.get("NOTION_TOKEN", os.getenv("NOTION_TOKEN", ""))
-PAGE_ID = st.secrets.get("NOTION_PAGE_ID", "16a3c6146059806497fbf86d6349603d") 
+PAGE_ID = st.secrets.get("NOTION_PAGE_ID", "2377544a-512b-804d-b020-d8e8b62fd00d") 
 
 OUTPUT_FILE = "docs/ANTAY_METHODOLOGY.md"
 
@@ -82,7 +82,9 @@ def fetch_children_recursive(client, block_id, depth=0, file_handle=None):
                 fetch_children_recursive(client, block["id"], depth + 1, file_handle)
                 
     except Exception as e:
+        import traceback
         print(f"{indent}Error fetching children for {block_id}: {e}")
+        print(f"{indent}Full error details: {traceback.format_exc()}")
 
 def fetch_antay_methodology():
     print(f"Conectando a Notion (Page ID: {PAGE_ID})...")

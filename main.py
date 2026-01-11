@@ -2362,7 +2362,9 @@ class EnhancedCatalogApp:
             2.  Haz clic derecho sobre la imagen y selecciona **"Copiar dirección de imagen"**.
             3.  Pega esa URL en tu archivo Excel o Google Sheets. Si la imagen se ve en el navegador al pegar la URL, ¡funcionará en CatalogPro!
             """)
-
+        
+        with st.expander("¿Qué es el usuario 'admin@antayperu.com'?"):
+            st.markdown("""
             Es el **usuario raíz** o **super-administrador** del sistema. Se crea por defecto para asegurar que siempre haya una forma de acceder y gestionar la aplicación. Por seguridad, este usuario no puede ser eliminado ni se le pueden quitar los permisos de administrador desde la interfaz.
             """)
             
