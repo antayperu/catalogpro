@@ -2063,15 +2063,33 @@ class EnhancedCatalogApp:
         
         # --- Control Panel ---
         st.markdown("### 🎛️ Panel de Control")
-        c_ctrl, c_action, c_download = st.columns([1.5, 1.5, 2])
         
-        with c_ctrl:
-            use_optimized = st.checkbox("🚀 Motor Optimizado (Beta)", value=True, help="Habilita descarga paralela y caché.")
+        # CP-UX-001: Defaults Premium forzados
+        use_optimized = True  # Motor Premium por defecto
+        compatibility_mode = False  # Modo compatibilidad desactivado por defecto
+        
+        # CP-UX-001: Sección Admin/Avanzado (Solo para Admin)
+        is_admin = st.session_state.get('user_info', {}).get('is_admin', False)
+        
+        if is_admin:
+            with st.expander("⚙️ Avanzado (Solo Soporte)", expanded=False):
+                st.warning("⚠️ **Uso exclusivo para soporte técnico**\n\nActivar solo si la exportación Premium presenta problemas.")
+                compatibility_mode = st.checkbox(
+                    "Modo compatibilidad (Motor Legacy)",
+                    value=False,
+                    help="Desactiva optimizaciones y usa motor clásico. Usar solo si hay errores con el motor Premium."
+                )
+                
+                if compatibility_mode:
+                    use_optimized = False
+                    st.info("ℹ️ Modo compatibilidad activado: Motor Legacy sin optimizaciones")
+        
+        c_action, c_download = st.columns([1, 2])
             
         with c_action:
             # Disable if already generating handled by Streamlit spinner mostly, 
             # but we can use session state to show different label if needed.
-            generate_btn = st.button("⚙️ Generar Nuevo PDF", type="primary", use_container_width=True)
+            generate_btn = st.button("⚡ Descargar PDF Premium", type="primary", use_container_width=True)
             
         with c_download:
             if 'pdf_generated' in st.session_state and st.session_state['pdf_generated']:
@@ -2093,7 +2111,7 @@ class EnhancedCatalogApp:
             detailed_status = st.empty()
             
             try:
-                status_container.info("⏳ Iniciando motor de generación...")
+                status_container.info("⏳ Iniciando generación Premium...")
                 
                 if use_optimized:
                     # UX: Progress Handler with Time Estimation
@@ -2116,7 +2134,8 @@ class EnhancedCatalogApp:
                     )
                     st.session_state['last_pdf_stats'] = stats
                 else:
-                    with st.spinner("Generando PDF (Motor Legacy)..."):
+                    # CP-UX-001: Modo compatibilidad (solo Admin)
+                    with st.spinner("Generando PDF (Modo Compatibilidad)..."):
                         pdf_bytes = self.pdf_exporter.generate_pdf_with_images(
                             df,
                             st.session_state.business_name,
@@ -2128,14 +2147,44 @@ class EnhancedCatalogApp:
 
                 st.session_state['pdf_generated'] = pdf_bytes
                 
-                status_container.success("✅ ¡PDF Listo! Descárgalo usando el botón de arriba.")
+                status_container.success("✅ ¡PDF Premium listo! Descárgalo usando el botón de arriba.")
                 detailed_status.empty()
                 time.sleep(1) # Visual feedback
                 st.rerun() # Update UI
                 
             except Exception as e:
-                st.error(f"❌ Error al generar PDF: {str(e)}")
-                st.session_state['pdf_generated'] = None
+                # CP-UX-001: Fallback automático con mensaje simple
+                status_container.warning("⚠️ Intentando modo compatibilidad automático...")
+                
+                try:
+                    # Fallback: intentar con motor legacy
+                    with st.spinner("Generando PDF (Modo Compatibilidad)..."):
+                        pdf_bytes = self.pdf_exporter.generate_pdf_with_images(
+                            df,
+                            st.session_state.business_name,
+                            st.session_state.currency,
+                            st.session_state.get('phone_number'),
+                            st.session_state.get('user_email')
+                        )
+                    
+                    st.session_state['pdf_generated'] = pdf_bytes
+                    st.session_state['last_pdf_stats'] = None
+                    
+                    status_container.success("✅ PDF generado en modo compatibilidad. Descárgalo arriba.")
+                    st.info("ℹ️ Se usó el modo compatibilidad debido a un problema temporal.")
+                    detailed_status.empty()
+                    time.sleep(1)
+                    st.rerun()
+                    
+                except Exception as e2:
+                    # CP-UX-001: Mensaje de error simple sin términos técnicos
+                    st.error("❌ No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte.")
+                    if is_admin:
+                        # Solo mostrar detalles técnicos a Admin
+                        with st.expander("🔧 Detalles Técnicos (Admin)", expanded=False):
+                            st.error(f"Error Premium: {str(e)}")
+                            st.error(f"Error Fallback: {str(e2)}")
+                    st.session_state['pdf_generated'] = None
             finally:
                 time.sleep(1)
                 progress_bar.empty()
