@@ -1359,6 +1359,28 @@ class EnhancedCatalogApp:
             st.session_state.logo = None
         if 'auth_manager' not in st.session_state:
             st.session_state.auth_manager = None
+    
+    # CP-UX-003: Función centralizada para estado de plan (MVP sin BD)
+    def get_user_plan_status(self, user_email):
+        """
+        Obtiene el estado del plan del usuario.
+        MVP: Retorna valores por defecto configurables.
+        FUTURO: Leerá de Postgres sin cambiar la UI.
+        
+        Returns:
+            dict: {
+                'plan_type': 'Free' | 'Cantidad' | 'Tiempo',
+                'remaining': int | None,  # Catálogos restantes (si es Cantidad)
+                'expiry_date': str | None  # Fecha vencimiento (si es Tiempo)
+            }
+        """
+        # MVP: Configuración por defecto
+        # TODO: Reemplazar con query a Postgres cuando esté disponible
+        return {
+            'plan_type': 'Free',
+            'remaining': 5,  # Catálogos restantes
+            'expiry_date': None  # None para Free y Cantidad
+        }
         
     def run(self):
         # PRIMERO: Verificar autenticación
@@ -1561,6 +1583,47 @@ class EnhancedCatalogApp:
         auth = st.session_state.auth_manager
         user_email = st.session_state.user_email
         user_info = st.session_state.user_info
+
+        # CP-UX-003: Tarjeta Plan y uso
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 💎 Plan y uso")
+        
+        plan_status = self.get_user_plan_status(user_email)
+        plan_type = plan_status['plan_type']
+        remaining = plan_status['remaining']
+        expiry_date = plan_status['expiry_date']
+        
+        # Mostrar tipo de plan
+        if plan_type == "Free":
+            st.sidebar.info(f"**Plan:** {plan_type}")
+        elif plan_type == "Cantidad":
+            st.sidebar.success(f"**Plan:** {plan_type}")
+        elif plan_type == "Tiempo":
+            st.sidebar.success(f"**Plan:** {plan_type}")
+        
+        # Mostrar saldo o vigencia
+        if plan_type in ["Free", "Cantidad"] and remaining is not None:
+            if remaining > 0:
+                st.sidebar.caption(f"✅ Te quedan **{remaining}** catálogos")
+            else:
+                st.sidebar.warning("⚠️ No te quedan catálogos disponibles")
+        elif plan_type == "Tiempo" and expiry_date:
+            st.sidebar.caption(f"📅 Vence: **{expiry_date}**")
+        
+        # CTA WhatsApp
+        whatsapp_number = "51921566036"
+        whatsapp_message = f"Hola, quiero ampliar mi plan. Mi correo es {user_email}"
+        whatsapp_url = f"https://wa.me/{whatsapp_number}?text={quote(whatsapp_message)}"
+        
+        st.sidebar.markdown(
+            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration: none;">'
+            f'<div style="background: linear-gradient(90deg, #25D366 0%, #128C7E 100%); '
+            f'color: white; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; '
+            f'font-weight: bold; margin-top: 0.5rem;">📱 Comprar / Ampliar plan</div></a>',
+            unsafe_allow_html=True
+        )
+        
+        st.sidebar.markdown("---")
 
         with st.sidebar.expander("🏢 Negocio", expanded=True):
             business_name = st.text_input(
