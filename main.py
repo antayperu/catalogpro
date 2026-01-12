@@ -1666,7 +1666,7 @@ class EnhancedCatalogApp:
     def render_main_content(self, is_admin):
         # Define Tabs
         # Base tabs
-        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "Exportar", "📧 Email"]
+        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email"]
         if is_admin:
              tabs_titles.append("👨‍💼 Admin")
         
@@ -2046,10 +2046,17 @@ class EnhancedCatalogApp:
             self.render_empty_state('no_data', 'catalog_tab_no_df')
         
     def render_export_options(self):
-        st.header("Exportar Catálogo")
+        # CP-UX-002: Header y microcopy simple
+        st.markdown("## 📄 Paso final: descarga tu catálogo")
+        
+        st.info("""
+        **Genera un PDF premium listo para compartir por WhatsApp y redes.**
+        
+        💡 Nota: cada descarga exitosa del PDF cuenta como 1 catálogo generado.
+        """)
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.info("Primero carga datos en la pestaña 'Cargar'")
+            st.warning("⚠️ Primero carga datos en la pestaña '📊 Cargar'")
             return
             
         # Use Filtered Data (CP-FEAT-008)
@@ -2059,7 +2066,7 @@ class EnhancedCatalogApp:
         # Fallback if filtered is empty but shouldn't be (sanity check)
         if df is None: df = full_df
 
-        st.info(f"📤 **Resumen:** Se exportarán **{len(df)}** productos (de un total de {len(full_df)}). Los filtros aplicados en la pestaña 'Catálogo' se respetan aquí.")
+        st.caption(f"📤 Se exportarán **{len(df)}** productos (de un total de {len(full_df)}). Los filtros aplicados en la pestaña 'Catálogo' se respetan aquí.")
         
         # --- Control Panel ---
         st.markdown("### 🎛️ Panel de Control")
