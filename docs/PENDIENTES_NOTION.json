@@ -1,0 +1,320 @@
+[
+  {
+    "id": "2e67544a-512b-8054-858d-f2339f255b96",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: get_user_plan_status() lee de Postgres.\nAC-02: Consumo y auditoría persisten en Postgres.\nAC-03: No cambia UI (sidebar, bloqueo, admin).\nAC-04: Migración incluye script de carga inicial desde Sheet."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-LIC-001..005"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Arquitectura"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "COULD"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Fase PRO; no bloquear MVP."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Sin Estado"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Documento de migración + pruebas de lectura/escritura en Postgres."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Migración a Postgres (PRO): mover planes/consumo/auditoría desde Google Sheet a Postgres. Mantener misma UI; cambiar solo la capa de datos."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-006"
+      }
+    }
+  },
+  {
+    "id": "2e67544a-512b-805a-a148-e532278e95d7",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Admin puede crear usuario y asignar plan/cuota/vigencia.\nAC-02: Opción bloquear usuario (bloqueo total portal).\nAC-03: Cambios persisten (Sheet) y aplican al login.\nAC-04: No existe borrado automático de usuarios al cerrar sesión."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-LIC-003"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Alinear con FRD v1.1 sección admin."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Sin Estado"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Video: crear usuario + asignar cuota + login usuario.\nVideo: bloquear usuario y ver bloqueo."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Panel Admin: alta/edición de usuario (plan: Free/Cantidad/Tiempo), asignar cuota inicial, cambiar vigencia, bloquear/desbloquear usuario. No borrar usuarios por sesión."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-004"
+      }
+    }
+  },
+  {
+    "id": "2e67544a-512b-80d7-ac23-e209ddbccf75",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Usuario bloqueado no accede a tabs internas.\nAC-02: Se muestra pantalla única con CTA WhatsApp (+51921566036) y mensaje prearmado con email.\nAC-03: Admin NO queda bloqueado.\nAC-04: Mensaje sin jerga técnica."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-LIC-001, CP-LIC-003"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Debe bloquear ‘de todo el portal’ según FRD."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Sin Estado"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Captura pantalla bloqueo + WhatsApp.\nPrueba: usuario con saldo 0 queda bloqueado."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Bloqueo total del portal cuando: (a) saldo por cantidad = 0, o (b) licencia por tiempo vencida. Mostrar pantalla de bloqueo + CTA WhatsApp."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-002"
+      }
+    }
+  },
+  {
+    "id": "2e67544a-512b-80dd-a3b4-f30da41d1a1a",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Si exportación PDF termina OK, se registra 1 consumo.\nAC-02: Si exportación falla, NO descuenta.\nAC-03: No descuenta doble por recargar página o reintentar el mismo PDF.\nAC-04: Sidebar refleja nuevo saldo inmediatamente."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-UX-003 (sidebar plan) ✅"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "MVP: persistencia temporal (ver CP-LIC-003)."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Sin Estado"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Video: export OK descuenta 1.\nVideo: export falla no descuenta.\nCaptura sidebar antes/después."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Consumo real por exportación: cada descarga exitosa del PDF descuenta 1 del saldo (por cantidad). Evitar doble consumo por reintentos."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-001"
+      }
+    }
+  },
+  {
+    "id": "2e67544a-512b-80e9-a145-cd6086d3b67f",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Cada consumo exitoso genera un registro auditable.\nAC-02: Admin puede revisar histórico por email.\nAC-03: No se guarda información sensible adicional."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-LIC-001, CP-LIC-003"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "SHOULD"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Útil para soporte y disputas de cuota."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Sin Estado"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Captura de registros en Audit + export OK genera fila."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Auditoría mínima de consumos: registrar fecha/hora, email, acción (export OK), resultado, saldo final. (Sheet ‘Audit’ o log)."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-005"
+      }
+    }
+  },
+  {
+    "id": "2e67544a-512b-80f2-b640-ef6de1388dda",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Existe fuente única de verdad (Sheet) para plan/saldo/vigencia por email.\nAC-02: Actualización de saldo al exportar (CP-LIC-001) persiste.\nAC-03: Admin puede editar cuota/vigencia en la Sheet y se refleja en app.\nAC-04: Manejo de error de Sheet (mensaje simple)."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "Acceso Google Sheets ya implementado ✅"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Arquitectura"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Preparar función única get_user_plan_status() para leer de Sheet."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Ready"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Capturas de Sheet + prueba persistencia (cerrar sesión y reingresar)."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Persistencia temporal de licencias/consumo SIN Postgres: usar Google Sheet ‘Licencias’ administrada por admin (o fallback JSON). Lectura/escritura por email."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-LIC-003"
+      }
+    }
+  }
+]

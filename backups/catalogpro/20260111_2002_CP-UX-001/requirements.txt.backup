@@ -1,0 +1,10 @@
+streamlit
+pandas
+Pillow
+reportlab
+openpyxl
+requests
+numpy
+bcrypt
+
+notion-client

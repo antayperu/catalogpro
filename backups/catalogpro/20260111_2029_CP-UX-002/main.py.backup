@@ -22,10 +22,6 @@ from auth import check_authentication, AuthManager
 from reportlab.pdfgen import canvas
 import time
 
-# CP-UX-010 v4: FRD Schema and Validator
-from frd_schema import FRD_SCHEMA, get_required_columns, get_optional_columns, get_all_columns
-from frd_validator import FRDValidator
-
 class NumberedCanvas(canvas.Canvas):
     """Canvas avanzado que soporta 'Página X de Y'"""
     def __init__(self, *args, **kwargs):
@@ -598,36 +594,30 @@ class EnhancedPDFExporter:
         hierarchy_cols = ['Línea', 'Familia', 'Grupo']
         valid_cols = [c for c in hierarchy_cols if c in df.columns]
         
-        # Check if hierarchy columns have actual data (not all NaN)
-        has_hierarchy_data = False
-        if valid_cols:
-            for col in valid_cols:
-                if df[col].notna().any():
-                    has_hierarchy_data = True
-                    break
+        if not valid_cols:
+            valid_cols = [df.columns[0]] # Fallback to first column
+            
+        # Sort Data
+        sort_cols = valid_cols + ['Producto']
+        df_sorted = df.sort_values(by=sort_cols)
         
-        # If no hierarchy data, process all products without grouping
-        if not has_hierarchy_data or not valid_cols:
-            # No hierarchy - process all products as one flat list
-            valid_cols = []  # Don't group by anything
-            df_sorted = df.sort_values(by=['Producto'])
-            
-            # Create a single "group" with all products
-            grouped = [(None, df_sorted)]
-        else:
-            # Has hierarchy - use normal grouping
-            # Sort Data
-            sort_cols = valid_cols + ['Producto']
-            df_sorted = df.sort_values(by=sort_cols)
-            
-            # Grouping Logic
-            grouped = df_sorted.groupby(valid_cols)
+        # Grouping Logic
+        # We will iterate and detect changes to inject headers
+        # Since we want to nest, standard groupby is tricky. Better to use simple iteration or multiple groupbys.
+        # Let's use recursive grouping or just simple 3-level grouping.
         
         total_rows = len(df_sorted)
         processed_rows = 0
         
+        # Group by valid hierarchy
+        # To simplify: We just need to iterate groups.
+        # If we have [Linea, Familia, Grupo], we group by all 3.
+        # But we need headers for each level change.
+        
+        grouped = df_sorted.groupby(valid_cols)
+        
         # We can implement a "smart iterator" that checks previous key.
-        prev_keys = [None] * len(valid_cols) if valid_cols else []
+        prev_keys = [None] * len(valid_cols)
         
         # However, to use KeepTogether properly on the LOWEST level (Grupo + Products), we should group by the FULL hierarchy.
         
@@ -635,22 +625,21 @@ class EnhancedPDFExporter:
             # 'name' is a tuple of values (Linea, Familia, Grupo)
             if not isinstance(name, tuple): name = (name,)
             
-            # Check Level Changes (only if we have hierarchy)
-            if prev_keys:  # Only process headers if we have hierarchy
-                for i, val in enumerate(name):
-                    if val != prev_keys[i]:
-                        # Level i changed. Print Header i and all subsequent headers
-                        clean_val = self._clean_text(val)
-                        if not clean_val: continue
-                        
-                        if i == 0: story.append(Paragraph(str(clean_val).upper(), h1_style))
-                        elif i == 1: story.append(Paragraph(str(clean_val), h2_style))
-                        elif i == 2: story.append(Paragraph(str(clean_val), h3_style))
-                        
-                        # Reset lower levels
-                        for j in range(i+1, len(prev_keys)):
-                            prev_keys[j] = None
-                        prev_keys[i] = val
+            # Check Level Changes
+            for i, val in enumerate(name):
+                if val != prev_keys[i]:
+                    # Level i changed. Print Header i and all subsequent headers
+                    clean_val = self._clean_text(val)
+                    if not clean_val: continue
+                    
+                    if i == 0: story.append(Paragraph(str(clean_val).upper(), h1_style))
+                    elif i == 1: story.append(Paragraph(str(clean_val), h2_style))
+                    elif i == 2: story.append(Paragraph(str(clean_val), h3_style))
+                    
+                    # Reset lower levels
+                    for j in range(i+1, len(prev_keys)):
+                        prev_keys[j] = None
+                    prev_keys[i] = val
                     
             # --- Build Product Table for this Group ---
             section_elements = []  
@@ -821,8 +810,6 @@ class EnhancedPDFExporter:
         else:
             # Legacy Flow (No Branding applied to maintain legacy behavior strictly)
             if progress_callback: progress_callback(0.7, "Renderizando diseño clásico...")
-            # _build_pdf_doc builds the story, we need to extract it
-            # Actually, looking at the code, _build_pdf_doc returns the story
             story = self._build_pdf_doc(doc, df, currency, business_name) 
             
         # 3. Render
@@ -851,7 +838,7 @@ class EnhancedPDFExporter:
         }
         
         buffer.seek(0)
-        return buffer.getvalue(), stats # Return bytes and stats
+        return buffer, stats # Return buffer and stats
         
     def _add_footer_first(self, canvas, doc):
         """Footer solo para la primera página (puede variar si se desea)"""
@@ -917,9 +904,8 @@ class EnhancedPDFExporter:
         story.extend(self._create_enhanced_catalog_info(df, currency))
         story.extend(self._create_enhanced_product_cards(df, currency))
         
-        # Don't build here - just return the story
-        # The caller (generate_pdf_optimized) will build it
-        return story
+        doc.build(story, onFirstPage=first_page_template, onLaterPages=later_pages_template)
+        return doc
         
     def _create_enhanced_header(self, business_name):
         """Crear header mejorado del PDF"""
@@ -1373,28 +1359,6 @@ class EnhancedCatalogApp:
             st.session_state.logo = None
         if 'auth_manager' not in st.session_state:
             st.session_state.auth_manager = None
-    
-    # CP-UX-003: Función centralizada para estado de plan (MVP sin BD)
-    def get_user_plan_status(self, user_email):
-        """
-        Obtiene el estado del plan del usuario.
-        MVP: Retorna valores por defecto configurables.
-        FUTURO: Leerá de Postgres sin cambiar la UI.
-        
-        Returns:
-            dict: {
-                'plan_type': 'Free' | 'Cantidad' | 'Tiempo',
-                'remaining': int | None,  # Catálogos restantes (si es Cantidad)
-                'expiry_date': str | None  # Fecha vencimiento (si es Tiempo)
-            }
-        """
-        # MVP: Configuración por defecto
-        # TODO: Reemplazar con query a Postgres cuando esté disponible
-        return {
-            'plan_type': 'Free',
-            'remaining': 5,  # Catálogos restantes
-            'expiry_date': None  # None para Free y Cantidad
-        }
         
     def run(self):
         # PRIMERO: Verificar autenticación
@@ -1492,14 +1456,14 @@ class EnhancedCatalogApp:
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
-        /* ROLLBACK: Original card styles restored */
+        /* Estilos de las tarjetas de productos basados en el exportador HTML */
         .product-card {
             background: white;
             border-radius: 15px;
             padding: 1.5rem;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             transition: transform 0.3s;
-            height: 100%;
+            height: 100%; /* Asegura que las tarjetas en una fila tengan la misma altura */
             display: flex;
             flex-direction: column;
         }
@@ -1509,20 +1473,16 @@ class EnhancedCatalogApp:
         }
         .product-image-container {
             width: 100%;
-            height: 200px;
-            overflow: hidden;
-            border-radius: 10px;
+            height: 200px; /* Fixed height for all images */
+            overflow: hidden; /* Hide parts of the image that are cropped */
+            border-radius: 10px; /* Rounded corners for the container */
             margin-bottom: 1rem;
-            background: #f8f9fa;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         .product-image-container img {
             width: 100%;
             height: 100%;
-            object-fit: contain; /* CP-UX-009: Better image quality */
-            object-position: center;
+            object-fit: cover; /* Crop to fill the container */
+            object-position: center; /* Center the cropped image */
         }
         .product-title {
             font-size: 1.3rem;
@@ -1534,13 +1494,13 @@ class EnhancedCatalogApp:
             color: #7f8c8d;
             font-size: 0.9rem;
             margin-bottom: 1rem;
-            flex-grow: 1;
+            flex-grow: 1; /* Permite que la descripción ocupe el espacio disponible */
         }
         .product-footer {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: auto;
+            margin-top: auto; /* Empuja el footer hacia abajo */
         }
         .product-price {
             font-size: 1.4rem;
@@ -1550,6 +1510,35 @@ class EnhancedCatalogApp:
         .product-unit {
             font-size: 0.8rem;
             color: #95a5a6;
+        }
+        .product-actions-container {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .stButton > button.whatsapp-button {
+            background: #25d366; /* WhatsApp green */
+            color: white;
+            border-radius: 25px;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            border: none;
+            transition: background 0.2s;
+        }
+        .stButton > button.whatsapp-button:hover {
+            background: #1da851;
+        }
+        .stButton > button.email-button {
+            background: #3498db; /* Streamlit blue */
+            color: white;
+            border-radius: 25px;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            border: none;
+            transition: background 0.2s;
+        }
+        .stButton > button.email-button:hover {
+            background: #2980b9;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -1572,47 +1561,6 @@ class EnhancedCatalogApp:
         auth = st.session_state.auth_manager
         user_email = st.session_state.user_email
         user_info = st.session_state.user_info
-
-        # CP-UX-003: Tarjeta Plan y uso
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 💎 Plan y uso")
-        
-        plan_status = self.get_user_plan_status(user_email)
-        plan_type = plan_status['plan_type']
-        remaining = plan_status['remaining']
-        expiry_date = plan_status['expiry_date']
-        
-        # Mostrar tipo de plan
-        if plan_type == "Free":
-            st.sidebar.info(f"**Plan:** {plan_type}")
-        elif plan_type == "Cantidad":
-            st.sidebar.success(f"**Plan:** {plan_type}")
-        elif plan_type == "Tiempo":
-            st.sidebar.success(f"**Plan:** {plan_type}")
-        
-        # Mostrar saldo o vigencia
-        if plan_type in ["Free", "Cantidad"] and remaining is not None:
-            if remaining > 0:
-                st.sidebar.caption(f"✅ Te quedan **{remaining}** catálogos")
-            else:
-                st.sidebar.warning("⚠️ No te quedan catálogos disponibles")
-        elif plan_type == "Tiempo" and expiry_date:
-            st.sidebar.caption(f"📅 Vence: **{expiry_date}**")
-        
-        # CTA WhatsApp
-        whatsapp_number = "51921566036"
-        whatsapp_message = f"Hola, quiero ampliar mi plan. Mi correo es {user_email}"
-        whatsapp_url = f"https://wa.me/{whatsapp_number}?text={quote(whatsapp_message)}"
-        
-        st.sidebar.markdown(
-            f'<a href="{whatsapp_url}" target="_blank" style="text-decoration: none;">'
-            f'<div style="background: linear-gradient(90deg, #25D366 0%, #128C7E 100%); '
-            f'color: white; padding: 0.5rem 1rem; border-radius: 8px; text-align: center; '
-            f'font-weight: bold; margin-top: 0.5rem;">📱 Comprar / Ampliar plan</div></a>',
-            unsafe_allow_html=True
-        )
-        
-        st.sidebar.markdown("---")
 
         with st.sidebar.expander("🏢 Negocio", expanded=True):
             business_name = st.text_input(
@@ -1718,7 +1666,7 @@ class EnhancedCatalogApp:
     def render_main_content(self, is_admin):
         # Define Tabs
         # Base tabs
-        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email"]
+        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "Exportar", "📧 Email"]
         if is_admin:
              tabs_titles.append("👨‍💼 Admin")
         
@@ -1732,11 +1680,13 @@ class EnhancedCatalogApp:
         # 1. Catálogo (Preview)
         with tabs[1]:
             if 'df' in st.session_state and st.session_state.df is not None:
-                # Set defaults for view settings
-                if 'items_per_page' not in st.session_state:
-                    st.session_state.items_per_page = 48
-                if 'show_preview_images' not in st.session_state:
-                    st.session_state.show_preview_images = True
+                # View Settings
+                with st.expander("⚙️ Configuración de Vista", expanded=False):
+                    c_view1, c_view2 = st.columns(2)
+                    with c_view1:
+                        st.session_state.items_per_page = st.selectbox("Productos por página", [24, 48, 96], index=0)
+                    with c_view2:
+                        st.session_state.show_preview_images = st.checkbox("Mostrar imágenes en vista previa", value=True, help="Desactivar para navegación ultra rápida")
 
                 self.render_catalog()
             else:
@@ -1845,525 +1795,76 @@ class EnhancedCatalogApp:
             raise e
             
     def render_data_loading(self):
-        # CP-UX-010 v3: Premium Import UI - Adaptive Source Selector
-        st.markdown("## Importar Datos")
-        st.caption("Carga tu inventario desde Excel o Google Sheets para generar catálogos profesionales")
+        st.header("Cargar Datos")
         
-        # Initialize session state
-        if 'import_stage' not in st.session_state:
-            st.session_state.import_stage = 'select'
-        if 'preview_data' not in st.session_state:
-            st.session_state.preview_data = None
-        if 'validation_status' not in st.session_state:
-            st.session_state.validation_status = 'idle'
-        
-        # CP-UX-010 v5: Show loaded data info + reset button with modal
         if 'df' in st.session_state and st.session_state.df is not None:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.info(f"**{len(st.session_state.df)} productos** cargados")
-            with col2:
-                if st.button("Reiniciar importación", type="secondary", key="reset_btn"):
-                    st.session_state.show_reset_modal = True
-                    st.rerun()
-        
-        # CP-UX-010 v5: Reset confirmation modal (corporate style)
-        if st.session_state.get('show_reset_modal', False):
-            st.markdown("---")
-            st.warning("### Confirmar reinicio")
-            st.markdown("""
-            Esto reiniciará la importación actual y eliminará:
-            
-            • Todos los datos cargados
-            • Vista previa y métricas
-            • Resultados de validación
-            • Configuración actual
-            
-            ¿Deseas continuar?
-            """)
-            
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                if st.button("Cancelar", type="secondary", key="cancel_reset"):
-                    st.session_state.show_reset_modal = False
-                    st.rerun()
-            
-            with col2:
-                if st.button("Reiniciar", type="primary", key="confirm_reset"):
-                    # Reset COMPLETO - Limpiar AMBOS tabs
+            c1, c2 = st.columns([3, 1])
+            with c2:
+                if st.button("🗑️ Limpiar", type="secondary", key="cld"):
                     st.session_state.df = None
                     st.session_state.data_sources = []
-                    
-                    # Limpiar estado de Excel
-                    st.session_state.excel_preview_data = None
-                    st.session_state.excel_import_stage = 'select'
-                    
-                    # Limpiar estado de Sheets
-                    st.session_state.sheets_preview_data = None
-                    st.session_state.sheets_import_stage = 'select'
-                    
-                    # Limpiar variables legacy (por compatibilidad)
-                    st.session_state.preview_data = None
-                    st.session_state.import_stage = 'select'
-                    st.session_state.validation_result = None
-                    st.session_state.validation_status = 'idle'
-                    
-                    st.session_state.current_page = 1
-                    st.session_state.show_reset_modal = False
-                    
-                    st.success("**Importación reiniciada exitosamente**")
+                    st.success("✅ Limpiado!")
                     st.rerun()
+            with c1:
+                st.info(f"{len(st.session_state.df)} productos")
         
-        st.markdown("---")
+        c1, c2 = st.columns(2)
         
-        # CP-UX-010 v3: Adaptive Source Selector (Tabs)
-        tab_excel, tab_sheets = st.tabs(["📄 Excel", "📊 Google Sheets"])
-        
-        # ===== EXCEL TAB =====
-        with tab_excel:
-            st.markdown("### Importar desde Excel")
-            st.caption("Sube tu archivo .xlsx con el inventario")
+        with c1:
+            st.subheader("Excel")
+            file = st.file_uploader("Archivo .xlsx", type=['xlsx'], key="exc")
             
-            # CP-UX-010 v4: FRD Schema Display
-            self._render_frd_schema(method='excel')
-            
-            st.markdown("---")
-            
-            # File uploader
-            file = st.file_uploader(
-                "Selecciona tu archivo",
-                type=['xlsx'],
-                key="exc",
-                help="Arrastra y suelta o haz click para seleccionar"
-            )
-            
-            # Process Excel file
             if file:
                 try:
-                    # Load data
-                    with st.spinner("Importando datos..."):
-                        df = self.data_handler.load_excel(file)
+                    df = self.data_handler.load_excel(file)
+                    cleaned = self.data_cleaner.clean_data(df)
+                    self.render_data_loading_with_progress(df, cleaned, f"Excel: {file.name}")
                     
-                    # Store in Excel-specific preview
-                    st.session_state.excel_preview_data = df
-                    st.session_state.excel_import_stage = 'preview'
-                    
-                    # Render preview workflow
-                    self._render_preview_workflow(df, f"Excel: {file.name}", source_type='excel')
-                    
+                    st.subheader("👀 Preview")
+                    display = st.session_state.df.tail(5).copy()
+                    display['Descripción'] = display['Descripción'].apply(lambda x: str(x)[:60]+'...' if len(str(x))>60 else str(x))
+                    st.dataframe(display, use_container_width=True)
                 except Exception as e:
-                    st.error(f"**Error al cargar archivo:** {str(e)}")
-                    st.caption("Verifica que el archivo contenga las columnas requeridas")
-        
-        # ===== GOOGLE SHEETS TAB =====
-        with tab_sheets:
-            st.markdown("### Importar desde Google Sheets")
-            st.caption("Conecta tu hoja de cálculo de Google")
+                    st.error(f"❌ {str(e)}")
+                    
+        with c2:
+            st.subheader("Google Sheets")
+            url = st.text_input("URL", key="gurl")
             
-            # CP-UX-010 v5: FRD Schema Display
-            self._render_frd_schema(method='sheets')
-            
-            st.markdown("---")
-            
-            # URL input
-            url = st.text_input(
-                "URL de Google Sheets",
-                key="gurl",
-                placeholder="https://docs.google.com/spreadsheets/d/...",
-                help="Asegúrate de que el documento sea público o compartido como lector"
-            )
-            
-            # Botón Validar
-            if st.button("Validar", type="secondary", key="validate_sheets"):
+            if st.button("Cargar", key="gld"):
                 if url:
                     try:
-                        # Limpiar estado anterior de Sheets
-                        st.session_state.sheets_preview_data = None
-                        st.session_state.sheets_import_stage = 'select'
+                        df = self.data_handler.load_google_sheets(url)
+                        cleaned = self.data_cleaner.clean_data(df)
+                        self.render_data_loading_with_progress(df, cleaned, "Sheets")
                         
-                        # Validar y cargar datos
-                        with st.spinner("Validando conexión y cargando datos..."):
-                            df = self.data_handler.load_google_sheets(url)
-                        
-                        # Guardar en Sheets-specific preview
-                        st.session_state.sheets_preview_data = df
-                        st.session_state.sheets_import_stage = 'preview'
-                        st.session_state.sheets_url = url
-                        
-                        st.success("URL válida y accesible")
-                        st.rerun()
-                        
+                        st.subheader("👀 Preview")
+                        display = st.session_state.df.tail(5).copy()
+                        display['Descripción'] = display['Descripción'].apply(lambda x: str(x)[:60]+'...' if len(str(x))>60 else str(x))
+                        st.dataframe(display, use_container_width=True)
                     except Exception as e:
-                        st.error("No se puede acceder al documento")
-                        st.caption(f"Error: {str(e)}")
-                        st.caption("Verifica que sea público o compartido como lector")
+                        st.error(f"❌ {str(e)}")
                 else:
-                    st.warning("Por favor ingresa una URL")
-            
-            # Mostrar preview si existe (usando variables específicas de Sheets)
-            if (st.session_state.get('sheets_import_stage') == 'preview' and 
-                st.session_state.get('sheets_preview_data') is not None):
-                df = st.session_state.sheets_preview_data
-                source_name = f"Google Sheets: {st.session_state.get('sheets_url', 'URL')}"
-                self._render_preview_workflow(df, source_name, source_type='sheets')
+                    st.warning("URL requerida")
         
-        # ===== RENDER DATA TABLE IF CONFIRMED =====
-        if st.session_state.import_stage == 'confirmed' and 'df' in st.session_state and st.session_state.df is not None:
-            self._render_data_table_premium()
-    
-    def _render_frd_schema(self, method='excel'):
-        """CP-UX-010 v5: Esquema FRD contraído con resumen visible y auto-expansión inteligente"""
-        
-        # Calcular resumen
-        required_count = len(get_required_columns())
-        optional_count = len(get_optional_columns())
-        total_count = len(get_all_columns())
-        
-        # Determinar si debe estar expandido
-        auto_expand = False
-        
-        # Auto-expandir SOLO si hay errores de estructura
-        validation_result = st.session_state.get('validation_result')
-        if validation_result and isinstance(validation_result, dict):
-            errors = validation_result.get('errors', [])
-            if errors:
-                for error in errors:
-                    if error.get('type') == 'MISSING_REQUIRED_COLUMN':
-                        auto_expand = True
-                        break
-        
-        # Resumen visible (siempre)
-        summary = f"{total_count} columnas | {required_count} obligatorias | {optional_count} opcionales"
-        
-        # Expander con resumen
-        with st.expander(f"Esquema de datos (FRD) — {summary}", expanded=auto_expand):
-            st.caption("Tu archivo debe contener las siguientes columnas:")
-            
-            # Tabla de esquema (sin emojis)
-            schema_data = []
-            for col_name, spec in FRD_SCHEMA.items():
-                estado = "Obligatorio" if spec['required'] else "Opcional"
-                schema_data.append({
-                    'Columna': col_name,
-                    'Estado': estado,
-                    'Tipo': spec['type'],
-                    'Ejemplo': str(spec['example'])
-                })
-            
-            df_schema = pd.DataFrame(schema_data)
-            st.dataframe(df_schema, use_container_width=True, height=400)
-        
-        # Botón siempre visible (fuera del expander)
-        if method == 'excel':
-            template_df = pd.DataFrame({col: [spec['example']] 
-                                       for col, spec in FRD_SCHEMA.items()})
-            csv = template_df.to_csv(index=False)
-            st.download_button(
-                "Descargar plantilla",
-                csv,
-                "plantilla_catalogpro.csv",
-                "text/csv",
-                type="secondary"
-            )
-        else:  # sheets
-            st.info("""
-            **Para Google Sheets:**
-            1. Crea una hoja con las columnas listadas arriba
-            2. La primera fila debe contener los nombres exactos
-            3. Asegúrate de que el documento sea público o compartido como lector
-            """)
-    
-    def _render_preview_workflow(self, df, source_name, source_type='excel'):
-        """CP-UX-010 v5: Vista previa con validación FRD (terminología corporativa en español)"""
-        # source_type: 'excel' o 'sheets' para keys únicas
-        st.markdown("---")
-        st.markdown("## Vista previa de importación")
-        st.caption(f"Fuente: {source_name}")
-        
-        # Ejecutar validación
-        validator = FRDValidator(df)
-        validation_result = validator.validate()
-        
-        # Resumen ejecutivo
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Filas detectadas", len(df))
-        
-        with col2:
-            st.metric("Columnas detectadas", len(df.columns))
-        
-        with col3:
-            error_count = validation_result['error_count']
-            st.metric(
-                "Errores", 
-                error_count,
-                delta="Bloquea importación" if error_count > 0 else "Sin errores",
-                delta_color="inverse" if error_count > 0 else "normal"
-            )
-        
-        with col4:
-            warning_count = validation_result['warning_count']
-            st.metric(
-                "Observaciones", 
-                warning_count,
-                delta="Revisar" if warning_count > 0 else "Sin observaciones",
-                delta_color="off"
-            )
-        
-        # Mostrar errores y observaciones
-        if not validation_result['is_valid']:
-            st.error("**Importación bloqueada:** Se encontraron errores en campos obligatorios")
-            
-            with st.expander("Ver detalle de errores", expanded=True):
-                for error in validation_result['errors']:
-                    st.markdown(f"**{error['type']}:** {error['message']}")
-                    if error.get('affected_rows'):
-                        rows_str = ', '.join(map(str, error['affected_rows'][:5]))
-                        if error.get('total_affected', 0) > 5:
-                            rows_str += f" ... (+{error['total_affected'] - 5} más)"
-                        st.caption(f"Filas afectadas: {rows_str}")
-        
-        if validation_result['warnings']:
-            st.warning("**Observaciones encontradas:** Campos opcionales con valores vacíos")
-            
-            with st.expander("Ver detalle de observaciones", expanded=False):
-                for warning in validation_result['warnings']:
-                    st.markdown(f"**{warning['type']}:** {warning['message']}")
-        
-        # Vista previa de 20 filas
-        st.markdown("**Primeras 20 filas:**")
-        st.caption("Las columnas obligatorias son esenciales para la importación")
-        
-        preview_df = df.head(20).copy()
-        
-        # Truncate long descriptions for preview
-        if 'Descripción' in preview_df.columns:
-            preview_df['Descripción'] = preview_df['Descripción'].apply(
-                lambda x: str(x)[:60]+'...' if len(str(x)) > 60 else str(x)
-            )
-        
-        st.dataframe(preview_df, use_container_width=True, height=400)
-        
-        # Guardar resultado de validación en session state
-        st.session_state.validation_result = validation_result
-        
-        # Botones de acción
-        st.markdown("---")
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            if st.button("← Cancelar", type="secondary", key=f"cancel_import_{source_type}"):
-                st.session_state.import_stage = 'select'
-                st.session_state.preview_data = None
-                st.session_state.validation_result = None
-                st.rerun()
-        
-        with col2:
-            # Deshabilitar si hay errores
-            can_import = validation_result['is_valid']
-            
-            button_label = "Confirmar importación" if can_import else "Importación bloqueada"
-            
-            # Usar un placeholder para el botón y feedback
-            button_placeholder = st.empty()
-            feedback_placeholder = st.empty()
-            
-            if button_placeholder.button(
-                button_label, 
-                type="primary" if can_import else "secondary",
-                key=f"confirm_import_{source_type}",
-                disabled=not can_import
-            ):
-                if can_import:
-                    try:
-                        # Mostrar estado "Importando..."
-                        button_placeholder.button("Importando…", type="primary", disabled=True, key=f"importing_btn_{source_type}")
-                        
-                        with feedback_placeholder:
-                            with st.spinner("Procesando datos..."):
-                                cleaned = self.data_cleaner.clean_data(df)
-                                self.render_data_loading_with_progress(df, cleaned, source_name)
-                        
-                        st.session_state.import_stage = 'confirmed'
-                        
-                        # Limpiar placeholders
-                        button_placeholder.empty()
-                        feedback_placeholder.empty()
-                        
-                        # Mostrar resultado de importación
-                        st.markdown("---")
-                        st.success("### Importación completada")
-                        
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            st.metric("Productos registrados", len(st.session_state.df))
-                        with col_b:
-                            obs_count = len(validation_result.get('warnings', []))
-                            st.metric("Observaciones", obs_count)
-                        with col_c:
-                            st.metric("Errores", 0)
-                        
-                        # Mostrar observaciones si las hay
-                        if validation_result['warnings']:
-                            with st.expander(f"Ver {len(validation_result['warnings'])} observaciones", expanded=False):
-                                for warning in validation_result['warnings']:
-                                    st.caption(f"• {warning['message']}")
-                        
-                        st.rerun()
-                        
-                    except Exception as e:
-                        button_placeholder.empty()
-                        feedback_placeholder.empty()
-                        st.error(f"**Error durante la importación:** {str(e)}")
-                        st.caption("Verifica que el archivo tenga la estructura correcta")
-    
-    def _render_data_table_premium(self):
-        """CP-UX-010 v3: Premium data table with toolbar and pagination"""
-        df = st.session_state.df
-        
-        st.markdown("---")
-        st.markdown(f"### 📦 Datos Cargados")
-        st.caption(f"{len(df)} productos en total")
-        
-        # Toolbar
-        col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
-        
-        with col1:
-            search = st.text_input(
-                "Buscar",
-                placeholder="🔎 Buscar productos...",
-                key="search_products",
-                label_visibility="collapsed"
-            )
-        
-        with col2:
-            filter_option = st.selectbox(
-                "Filtros",
-                ["Todos", "Con stock", "Sin stock"],
-                key="filter_stock",
-                label_visibility="collapsed"
-            )
-        
-        with col3:
-            sort_by = st.selectbox(
-                "Ordenar",
-                ["Nombre", "Precio ↑", "Precio ↓", "Stock ↑", "Stock ↓"],
-                key="sort_by",
-                label_visibility="collapsed"
-            )
-        
-        with col4:
-            page_size = st.selectbox(
-                "Filas",
-                [20, 50, 100],
-                key="page_size",
-                label_visibility="collapsed"
-            )
-        
-        # Apply filters
-        filtered_df = df.copy()
-        
-        # Search filter
-        if search:
-            mask = (
-                filtered_df['Producto'].astype(str).str.contains(search, case=False, na=False) |
-                filtered_df['Descripción'].astype(str).str.contains(search, case=False, na=False)
-            )
-            if 'Código' in filtered_df.columns:
-                mask |= filtered_df['Código'].astype(str).str.contains(search, case=False, na=False)
-            filtered_df = filtered_df[mask]
-        
-        # Stock filter
-        if filter_option == "Con stock":
-            filtered_df = filtered_df[filtered_df['Stock'] > 0]
-        elif filter_option == "Sin stock":
-            filtered_df = filtered_df[filtered_df['Stock'] == 0]
-        
-        # Sorting
-        if sort_by == "Nombre":
-            filtered_df = filtered_df.sort_values('Producto')
-        elif sort_by == "Precio ↑":
-            filtered_df = filtered_df.sort_values('Precio', ascending=True)
-        elif sort_by == "Precio ↓":
-            filtered_df = filtered_df.sort_values('Precio', ascending=False)
-        elif sort_by == "Stock ↑":
-            filtered_df = filtered_df.sort_values('Stock', ascending=True)
-        elif sort_by == "Stock ↓":
-            filtered_df = filtered_df.sort_values('Stock', ascending=False)
-        
-        # Pagination
-        total_rows = len(filtered_df)
-        total_pages = math.ceil(total_rows / page_size) if total_rows > 0 else 1
-        
-        # Page selector
-        if 'current_page' not in st.session_state:
-            st.session_state.current_page = 1
-        
-        col_prev, col_page, col_next = st.columns([1, 2, 1])
-        
-        with col_prev:
-            if st.button("← Anterior", disabled=st.session_state.current_page == 1, key="prev_page"):
-                st.session_state.current_page -= 1
-                st.rerun()
-        
-        with col_page:
-            st.caption(f"Página {st.session_state.current_page} de {total_pages}")
-        
-        with col_next:
-            if st.button("Siguiente →", disabled=st.session_state.current_page >= total_pages, key="next_page"):
-                st.session_state.current_page += 1
-                st.rerun()
-        
-        # Calculate slice
-        start_idx = (st.session_state.current_page - 1) * page_size
-        end_idx = min(start_idx + page_size, total_rows)
-        
-        # Display table
-        if total_rows > 0:
-            page_df = filtered_df.iloc[start_idx:end_idx]
-            
-            # Truncate descriptions for table view
-            display_df = page_df.copy()
-            if 'Descripción' in display_df.columns:
-                display_df['Descripción'] = display_df['Descripción'].apply(
-                    lambda x: str(x)[:80]+'...' if len(str(x)) > 80 else str(x)
-                )
-            
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                height=600
-            )
-            
-            # Footer
-            st.caption(f"Mostrando {start_idx + 1}-{end_idx} de {total_rows} productos")
-        else:
-            st.info("No se encontraron productos con los filtros aplicados")
-        
-        # CP-UX-010 v3: Structure example in collapsible expander
-        with st.expander("📘 ¿Qué estructura debe tener mi archivo?", expanded=False):
-            st.caption("Tu archivo debe contener las siguientes columnas en este orden:")
-            ex = pd.DataFrame({
-                'Línea': ['ELECTRO'],
-                'Familia': ['COMPUTO'],
-                'Grupo': ['LAPTOPS'],
-                'Marca': ['DELL'],
-                'Código': ['DL-5520'],
-                'Producto': ['Laptop Inspiron 15'],
-                'Descripción': ['Core i5 8GB RAM'],
-                'Unidad': ['UND'],
-                'Precio': [1299.99],
-                'Stock': [50],
-                'ImagenURL': ['https://ejemplo.com/lapt.jpg']
-            })
-            st.dataframe(ex, use_container_width=True)
-            st.caption("💡 **Tip:** Usa este ejemplo como plantilla para estructurar tu inventario")
+        st.subheader("📋 Estructura Requerida (Enterprise)")
+        ex = pd.DataFrame({
+            'Línea': ['ELECTRO'],
+            'Familia': ['COMPUTO'],
+            'Grupo': ['LAPTOPS'],
+            'Marca': ['DELL'],
+            'Código': ['DL-5520'],
+            'Producto': ['Laptop Inspiron 15'],
+            'Descripción': ['Core i5 8GB RAM'],
+            'Unidad': ['UND'],
+            'Precio': [1299.99],
+            'Stock': [50],
+            'ImagenURL': ['https://ejemplo.com/lapt.jpg']
+        })
+        st.dataframe(ex, use_container_width=True)
         
     def render_catalog(self):
-        # CP-UX-009 ROLLBACK: Original header with minimal improvements
-        st.header("Vista Previa del Catálogo")
+        st.header("Vista Previa")
 
         if 'df' in st.session_state and st.session_state.df is not None:
             st.session_state.viewed_catalog = True
@@ -2374,65 +1875,67 @@ class EnhancedCatalogApp:
             currency = st.session_state.currency if 'currency' in st.session_state else "S/"
             columns = 3
 
-            # CP-UX-009: Progressive filters - ONLY improvement kept
-            search = st.text_input(
-                "Búsqueda rápida", 
-                key="srch", 
-                placeholder="Buscar por nombre, código o descripción..."
-            )
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Limpiar email", key="cle"):
+                    st.session_state.email_products = []
+            with c2:
+                if 'email_products' in st.session_state and st.session_state.email_products:
+                    st.info(f"{len(st.session_state.email_products)}")
+
+            st.subheader("Filtros Jerárquicos")
             
-            # CP-UX-009: Advanced Filters - Collapsed by default
-            with st.expander("⚙️ Filtros Avanzados", expanded=False):
-                
-                # --- Hierarchical Filters ---
-                st.subheader("Filtros Jerárquicos")
-                c1, c2, c3 = st.columns(3)
+            # --- Hierarchical Filters ---
+            c1, c2, c3 = st.columns(3)
             
-                # 1. Linear Filter
-                unique_lines = df['Línea'].unique()
-                unique_lines = [x for x in unique_lines if pd.notna(x)]
-                available_lines = ['Todas'] + sorted(list(unique_lines))
-                selected_line = c1.selectbox("Línea", available_lines, key="fil_line")
-                
-                # 2. Family Filter (Dependent on Line)
-                if selected_line != 'Todas':
-                    unique_families = df[df['Línea'] == selected_line]['Familia'].unique()
-                else:
-                    unique_families = df['Familia'].unique()
-                
-                unique_families = [x for x in unique_families if pd.notna(x)]
-                available_families = ['Todas'] + sorted(list(unique_families))
-                selected_family = c2.selectbox("Familia", available_families, key="fil_fam")
-                
-                # 3. Brand Filter
-                unique_brands = df['Marca'].unique()
-                brands = sorted([x for x in unique_brands if pd.notna(x)])
-                selected_brands = c3.multiselect("Marca", brands, key="fil_brand")
+            # 1. Linear Filter
+            unique_lines = df['Línea'].unique()
+            unique_lines = [x for x in unique_lines if pd.notna(x)]
+            available_lines = ['Todas'] + sorted(list(unique_lines))
+            selected_line = c1.selectbox("Línea", available_lines, key="fil_line")
+            
+            # 2. Family Filter (Dependent on Line)
+            if selected_line != 'Todas':
+                unique_families = df[df['Línea'] == selected_line]['Familia'].unique()
+            else:
+                unique_families = df['Familia'].unique()
+            
+            unique_families = [x for x in unique_families if pd.notna(x)]
+            available_families = ['Todas'] + sorted(list(unique_families))
+            selected_family = c2.selectbox("Familia", available_families, key="fil_fam")
+            
+            # 3. Brand Filter
+            unique_brands = df['Marca'].unique()
+            brands = sorted([x for x in unique_brands if pd.notna(x)])
+            selected_brands = c3.multiselect("Marca", brands, key="fil_brand")
 
-                # --- Additional Filters ---
-                st.markdown("**Filtros Adicionales**")
-                f1, f2, f3 = st.columns(3)
-                
-                # 4. Group Filter (Dependent on Family)
-                if selected_family != 'Todas':
-                     unique_groups = df[(df['Línea'] == selected_line) & (df['Familia'] == selected_family)]['Grupo'].unique() if selected_line != 'Todas' else df[df['Familia'] == selected_family]['Grupo'].unique()
-                elif selected_line != 'Todas':
-                     unique_groups = df[df['Línea'] == selected_line]['Grupo'].unique()
-                else:
-                     unique_groups = df['Grupo'].unique() if 'Grupo' in df.columns else []
+            # --- New Filters (CP-FEAT-008) ---
+            st.divider()
+            f1, f2, f3 = st.columns(3)
+            
+            # 4. Group Filter (Dependent on Family)
+            if selected_family != 'Todas':
+                 unique_groups = df[(df['Línea'] == selected_line) & (df['Familia'] == selected_family)]['Grupo'].unique() if selected_line != 'Todas' else df[df['Familia'] == selected_family]['Grupo'].unique()
+            elif selected_line != 'Todas':
+                 unique_groups = df[df['Línea'] == selected_line]['Grupo'].unique()
+            else:
+                 unique_groups = df['Grupo'].unique() if 'Grupo' in df.columns else []
 
-                unique_groups = [g for g in unique_groups if pd.notna(g)]
-                available_groups = ['Todos'] + sorted(list(unique_groups))
-                selected_group = f1.selectbox("Grupo", available_groups, key="fil_group")
-                
-                # 5. Stock Filter
-                min_stock = f2.number_input("Stock >=", min_value=0, value=0, step=1, key="fil_stock", help="Muestra productos con stock mayor o igual a este número.")
-                
-                # 6. Photo Filter
-                only_with_photo = f3.checkbox("📸 Solo con Foto", value=False, key="fil_photo")
+            unique_groups = [g for g in unique_groups if pd.notna(g)]
+            available_groups = ['Todos'] + sorted(list(unique_groups))
+            selected_group = f1.selectbox("Grupo", available_groups, key="fil_group")
+            
+            # 5. Stock Filter
+            min_stock = f2.number_input("Stock >=", min_value=0, value=0, step=1, key="fil_stock", help="Muestra productos con stock mayor o igual a este número (N).")
+            
+            # 6. Photo Filter
+            only_with_photo = f3.checkbox("📸 Solo con Foto", value=False, key="fil_photo")
 
-                # --- Price Range ---
-                st.markdown("**Rango de Precio**")
+            # --- Basic Filters ---
+            c4, c5 = st.columns([2, 1])
+            with c4:
+                search = st.text_input("Buscar", key="srch", placeholder="Nombre, código o descripción...")
+            with c5:
                 # Handle empty price range safely
                 if not df.empty and 'Precio' in df.columns:
                     minp = float(df['Precio'].min())
@@ -2443,19 +1946,9 @@ class EnhancedCatalogApp:
                 if minp == maxp:
                     prange = (minp, maxp)
                 else:
-                    prange = st.slider("Selecciona rango", minp, maxp, (minp, maxp), key="pr", label_visibility="collapsed")
-            
-            # CP-UX-009: Set defaults for filters when not using expander
-            if 'fil_line' not in st.session_state:
-                selected_line = 'Todas'
-                selected_family = 'Todas'
-                selected_group = 'Todos'
-                selected_brands = []
-                min_stock = 0
-                only_with_photo = False
-                minp = float(df['Precio'].min()) if not df.empty else 0.0
-                maxp = float(df['Precio'].max()) if not df.empty else 0.0
-                prange = (minp, maxp)
+                    prange = st.slider("Rango Precio", minp, maxp, (minp, maxp), key="pr")
+
+            self.render_active_filters(search, prange, 'N/A', minp, maxp)
 
             # --- Apply Filters ---
             filtered = df.copy()
@@ -2520,24 +2013,23 @@ class EnhancedCatalogApp:
             
             # --- Pagination Controls ---
             st.divider()
-            kc1, kc2, kc3 = st.columns([3, 4, 3])
+            kc1, kc2, kc3 = st.columns([2, 5, 2])
             with kc1:
                 st.caption(f"Mostrando {start_idx + 1} - {end_idx} de {total_products}")
             with kc3:
-                # CP-UX-009 v3: Compact, professional navigation buttons
                 c_prev, c_page, c_next = st.columns([1, 2, 1])
                 with c_prev:
-                    if st.button("←", key="p_prev", disabled=current_page==1, help="Página anterior"):
+                    if st.button("◀", key="p_prev", disabled=current_page==1):
                         st.session_state.preview_page -= 1
                         st.rerun()
                 with c_next:
-                    if st.button("→", key="p_next", disabled=current_page>=total_pages, help="Página siguiente"):
+                    if st.button("▶", key="p_next", disabled=current_page>=total_pages):
                         st.session_state.preview_page += 1
                         st.rerun()
                 with c_page:
                     st.caption(f"Pág {current_page}/{total_pages}")
             
-            # ROLLBACK: Original grid rendering with cards
+            # --- Render Grid ---
             rows = math.ceil(len(page_df) / columns)
             for row in range(rows):
                 cols = st.columns(columns)
@@ -2545,25 +2037,19 @@ class EnhancedCatalogApp:
                     local_idx = row * columns + col_idx
                     if local_idx < len(page_df):
                         product = page_df.iloc[local_idx]
+                        # Use global index for keys if needed, or local
                         with cols[col_idx]:
                             self.catalog_generator._render_product_card(product, currency, start_idx + local_idx, row, show_images)
             
-            st.divider()
+            st.divider() # Bottom separator
         else:
             self.render_empty_state('no_data', 'catalog_tab_no_df')
         
     def render_export_options(self):
-        # CP-UX-002: Header y microcopy simple
-        st.markdown("## 📄 Paso final: descarga tu catálogo")
-        
-        st.info("""
-        **Genera un PDF premium listo para compartir por WhatsApp y redes.**
-        
-        💡 Nota: cada descarga exitosa del PDF cuenta como 1 catálogo generado.
-        """)
+        st.header("Exportar Catálogo")
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Primero carga datos en la pestaña '📊 Cargar'")
+            st.info("Primero carga datos en la pestaña 'Cargar'")
             return
             
         # Use Filtered Data (CP-FEAT-008)
@@ -2573,37 +2059,19 @@ class EnhancedCatalogApp:
         # Fallback if filtered is empty but shouldn't be (sanity check)
         if df is None: df = full_df
 
-        st.caption(f"📤 Se exportarán **{len(df)}** productos (de un total de {len(full_df)}). Los filtros aplicados en la pestaña 'Catálogo' se respetan aquí.")
+        st.info(f"📤 **Resumen:** Se exportarán **{len(df)}** productos (de un total de {len(full_df)}). Los filtros aplicados en la pestaña 'Catálogo' se respetan aquí.")
         
         # --- Control Panel ---
         st.markdown("### 🎛️ Panel de Control")
+        c_ctrl, c_action, c_download = st.columns([1.5, 1.5, 2])
         
-        # CP-UX-001: Defaults Premium forzados
-        use_optimized = True  # Motor Premium por defecto
-        compatibility_mode = False  # Modo compatibilidad desactivado por defecto
-        
-        # CP-UX-001: Sección Admin/Avanzado (Solo para Admin)
-        is_admin = st.session_state.get('user_info', {}).get('is_admin', False)
-        
-        if is_admin:
-            with st.expander("⚙️ Avanzado (Solo Soporte)", expanded=False):
-                st.warning("⚠️ **Uso exclusivo para soporte técnico**\n\nActivar solo si la exportación Premium presenta problemas.")
-                compatibility_mode = st.checkbox(
-                    "Modo compatibilidad (Motor Legacy)",
-                    value=False,
-                    help="Desactiva optimizaciones y usa motor clásico. Usar solo si hay errores con el motor Premium."
-                )
-                
-                if compatibility_mode:
-                    use_optimized = False
-                    st.info("ℹ️ Modo compatibilidad activado: Motor Legacy sin optimizaciones")
-        
-        c_action, c_download = st.columns([1, 2])
+        with c_ctrl:
+            use_optimized = st.checkbox("🚀 Motor Optimizado (Beta)", value=True, help="Habilita descarga paralela y caché.")
             
         with c_action:
             # Disable if already generating handled by Streamlit spinner mostly, 
             # but we can use session state to show different label if needed.
-            generate_btn = st.button("⚡ Descargar PDF Premium", type="primary", use_container_width=True)
+            generate_btn = st.button("⚙️ Generar Nuevo PDF", type="primary", use_container_width=True)
             
         with c_download:
             if 'pdf_generated' in st.session_state and st.session_state['pdf_generated']:
@@ -2625,7 +2093,7 @@ class EnhancedCatalogApp:
             detailed_status = st.empty()
             
             try:
-                status_container.info("⏳ Iniciando generación Premium...")
+                status_container.info("⏳ Iniciando motor de generación...")
                 
                 if use_optimized:
                     # UX: Progress Handler with Time Estimation
@@ -2648,8 +2116,7 @@ class EnhancedCatalogApp:
                     )
                     st.session_state['last_pdf_stats'] = stats
                 else:
-                    # CP-UX-001: Modo compatibilidad (solo Admin)
-                    with st.spinner("Generando PDF (Modo Compatibilidad)..."):
+                    with st.spinner("Generando PDF (Motor Legacy)..."):
                         pdf_bytes = self.pdf_exporter.generate_pdf_with_images(
                             df,
                             st.session_state.business_name,
@@ -2661,44 +2128,14 @@ class EnhancedCatalogApp:
 
                 st.session_state['pdf_generated'] = pdf_bytes
                 
-                status_container.success("✅ ¡PDF Premium listo! Descárgalo usando el botón de arriba.")
+                status_container.success("✅ ¡PDF Listo! Descárgalo usando el botón de arriba.")
                 detailed_status.empty()
                 time.sleep(1) # Visual feedback
                 st.rerun() # Update UI
                 
             except Exception as e:
-                # CP-UX-001: Fallback automático con mensaje simple
-                status_container.warning("⚠️ Intentando modo compatibilidad automático...")
-                
-                try:
-                    # Fallback: intentar con motor legacy
-                    with st.spinner("Generando PDF (Modo Compatibilidad)..."):
-                        pdf_bytes = self.pdf_exporter.generate_pdf_with_images(
-                            df,
-                            st.session_state.business_name,
-                            st.session_state.currency,
-                            st.session_state.get('phone_number'),
-                            st.session_state.get('user_email')
-                        )
-                    
-                    st.session_state['pdf_generated'] = pdf_bytes
-                    st.session_state['last_pdf_stats'] = None
-                    
-                    status_container.success("✅ PDF generado en modo compatibilidad. Descárgalo arriba.")
-                    st.info("ℹ️ Se usó el modo compatibilidad debido a un problema temporal.")
-                    detailed_status.empty()
-                    time.sleep(1)
-                    st.rerun()
-                    
-                except Exception as e2:
-                    # CP-UX-001: Mensaje de error simple sin términos técnicos
-                    st.error("❌ No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte.")
-                    if is_admin:
-                        # Solo mostrar detalles técnicos a Admin
-                        with st.expander("🔧 Detalles Técnicos (Admin)", expanded=False):
-                            st.error(f"Error Premium: {str(e)}")
-                            st.error(f"Error Fallback: {str(e2)}")
-                    st.session_state['pdf_generated'] = None
+                st.error(f"❌ Error al generar PDF: {str(e)}")
+                st.session_state['pdf_generated'] = None
             finally:
                 time.sleep(1)
                 progress_bar.empty()
