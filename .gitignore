@@ -9,3 +9,8 @@ venv/
 .streamlit/secrets.toml
 
 .img_cache/
+
+# Archivos temporales de Excel
+~$*.xlsx
+~$*.xls
+*.tmp
