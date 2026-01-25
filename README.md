@@ -46,6 +46,18 @@ Permite a pequenos comerciantes crear catalogos digitales profesionales a partir
 - Notion (documentacion)
 - GitHub (control de versiones)
 
+##  Estructura de Ramas (Metodología Antay)
+
+- **main**: Rama estable y publicada (producción)
+- **dev**: Rama de desarrollo activo
+- **feature/xxx**: Funcionalidades específicas
+- **fix/xxx**: Correcciones de errores
+
+### Flujo de Trabajo
+1. Desarrollo en `feature/xxx` o `fix/xxx`
+2. Merge a `dev` para integración
+3. Merge a `main` para release
+
 ---
 
 **Desarrollado por Antay Peru** 
