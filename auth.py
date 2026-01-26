@@ -5,68 +5,187 @@ from datetime import datetime
 import re
 import time
 import bcrypt
+import pandas as pd
+from abc import ABC, abstractmethod
+
+# Intentar importar gspread, manejar error si no está instalado
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    HAS_GSPREAD = True
+except ImportError:
+    HAS_GSPREAD = False
 
 def is_valid_email(email: str) -> bool:
     """Validar formato de email"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return re.match(pattern, email) is not None
 
-class AuthManager:
-    """Gestor de autenticación y usuarios"""
+class AuthBackend(ABC):
+    """Interfaz abstracta para backends de autenticación"""
+    @abstractmethod
+    def load_users(self) -> dict:
+        pass
     
-    def __init__(self):
-        # FIX (CP-BUG-011): Use absolute path to ensure persistence across execution contexts
+    @abstractmethod
+    def save_users(self, users_data: dict):
+        pass
+
+class JsonBackend(AuthBackend):
+    """Backend local usando archivo JSON"""
+    def __init__(self, filename="authorized_users.json"):
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        self.auth_file = os.path.join(base_dir, "authorized_users.json")
-        self.admin_email = "admin@antayperu.com"
-        self._ensure_auth_file_exists()
-        self._load_users()
+        self.filepath = os.path.join(base_dir, filename)
+        self._ensure_file_exists()
     
-    def _ensure_auth_file_exists(self):
-        """Crear archivo JSON si no existe con un admin y contraseña por defecto"""
-        if not os.path.exists(self.auth_file):
-            # Contraseña por defecto para el admin es 'admin'
+    def _ensure_file_exists(self):
+        if not os.path.exists(self.filepath):
+            # Admin por defecto: admin/admin
             default_password = "admin"
             hashed_password = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            
             initial_data = {
                 "users": {
-                    self.admin_email: {
+                    "admin@antayperu.com": {
                         "name": "Administrador",
                         "business_name": "CatalogPro",
                         "is_admin": True,
                         "password_hash": hashed_password,
                         "created_at": datetime.now().isoformat(),
                         "last_login": None,
-                        "currency": "S/", # Default currency
-                        "phone_number": "" # Default empty phone number
+                        "currency": "S/",
+                        "phone_number": ""
                     }
                 }
             }
-            with open(self.auth_file, 'w') as f:
+            with open(self.filepath, 'w') as f:
                 json.dump(initial_data, f, indent=2)
+
+    def load_users(self) -> dict:
+        try:
+            with open(self.filepath, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self._ensure_file_exists()
+            return self.load_users()
+
+    def save_users(self, users_data: dict):
+        with open(self.filepath, 'w') as f:
+            json.dump(users_data, f, indent=2)
+
+class GoogleSheetsBackend(AuthBackend):
+    """Backend en la nube usando Google Sheets"""
+    def __init__(self, service_account_info: dict, sheet_url: str):
+        if not HAS_GSPREAD:
+            raise ImportError("gspread no está instalado")
+        
+        self.scope = [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        self.creds = Credentials.from_service_account_info(service_account_info, scopes=self.scope)
+        self.client = gspread.authorize(self.creds)
+        self.sheet_url = sheet_url
+        self._ensure_sheet_structure()
+
+    def _get_worksheet(self):
+        try:
+            sheet = self.client.open_by_url(self.sheet_url)
+            return sheet.worksheet("Users")
+        except gspread.WorksheetNotFound:
+            sheet = self.client.open_by_url(self.sheet_url)
+            return sheet.add_worksheet(title="Users", rows=100, cols=10)
+        except Exception as e:
+            st.error(f"Error conectando a Google Sheets: {str(e)}")
+            raise e
+
+    def _ensure_sheet_structure(self):
+        """Verificar headers iniciales"""
+        ws = self._get_worksheet()
+        headers = ws.row_values(1)
+        expected_headers = ["email", "data"] # Guardamos todo el dict JSON en una columna 'data' para simplicidad
+        
+        if not headers or headers != expected_headers:
+            ws.clear()
+            ws.append_row(expected_headers)
+            
+            # Crear admin default si está vacío
+            default_password = "admin"
+            hashed = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            admin_data = {
+                "name": "Administrador",
+                "business_name": "CatalogPro",
+                "is_admin": True,
+                "password_hash": hashed,
+                "created_at": datetime.now().isoformat(),
+                "last_login": None,
+                "currency": "S/",
+                "phone_number": ""
+            }
+            ws.append_row(["admin@antayperu.com", json.dumps(admin_data)])
+
+    def load_users(self) -> dict:
+        ws = self._get_worksheet()
+        records = ws.get_all_records()
+        users_dict = {}
+        for row in records:
+            email = row.get('email')
+            data_str = row.get('data')
+            if email and data_str:
+                try:
+                    users_dict[email] = json.loads(data_str)
+                except:
+                    continue
+        return {"users": users_dict}
+
+    def save_users(self, users_data: dict):
+        """
+        Estrategia simple: Borrar todo y reescribir. 
+        Para producción masiva esto no escala, pero para <100 usuarios es seguro y fácil.
+        """
+        ws = self._get_worksheet()
+        ws.clear()
+        ws.append_row(["email", "data"])
+        
+        rows = []
+        for email, data in users_data.get("users", {}).items():
+            rows.append([email, json.dumps(data)])
+        
+        if rows:
+            ws.append_rows(rows)
+
+class AuthManager:
+    """Gestor de autenticación con soporte híbrido"""
+    
+    def __init__(self):
+        self.admin_email = "admin@antayperu.com"
+        
+        # Determinar backend
+        if "gcp_service_account" in st.secrets and "auth_sheet_url" in st.secrets.get("general", {}):
+            try:
+                self.backend = GoogleSheetsBackend(
+                    st.secrets["gcp_service_account"],
+                    st.secrets["general"]["auth_sheet_url"]
+                )
+                print("✅ Usando GoogleSheetsBackend")
+            except Exception as e:
+                print(f"⚠️ Fallo al conectar Sheets ({e}), usando JsonBackend")
+                self.backend = JsonBackend()
+        else:
+            print("ℹ️ No hay credenciales GCP, usando JsonBackend")
+            self.backend = JsonBackend()
+            
+        self._load_users()
     
     def _load_users(self):
-        """Cargar usuarios desde JSON"""
-        try:
-            with open(self.auth_file, 'r') as f:
-                self.users = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            self._ensure_auth_file_exists()
-            with open(self.auth_file, 'r') as f:
-                self.users = json.load(f)
+        self.users = self.backend.load_users()
     
     def _save_users(self):
-        """Guardar usuarios a JSON"""
-        with open(self.auth_file, 'w') as f:
-            json.dump(self.users, f, indent=2)
+        self.backend.save_users(self.users)
     
     def is_authorized(self, email: str) -> bool:
-        """Verificar si email está autorizado"""
         return email.lower() in [e.lower() for e in self.users["users"].keys()]
     
     def add_user(self, email: str, name: str, business: str, password: str) -> bool:
-        """Agregar usuario nuevo con contraseña hasheada"""
         if not is_valid_email(email):
             raise ValueError("Formato de email inválido")
         if not password:
@@ -91,9 +210,7 @@ class AuthManager:
         return True
 
     def remove_user(self, email: str) -> bool:
-        """Eliminar usuario (excepto admin)"""
         email = email.lower()
-        
         if email == self.admin_email.lower():
             return False
         
@@ -101,14 +218,11 @@ class AuthManager:
             del self.users["users"][email]
             self._save_users()
             return True
-        
         return False
 
     def update_password(self, email: str, new_password: str) -> bool:
-        """Actualizar la contraseña de un usuario."""
         if not new_password:
             raise ValueError("La nueva contraseña no puede estar vacía")
-            
         email = email.lower()
         if email in self.users["users"]:
             hashed_password = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -118,7 +232,6 @@ class AuthManager:
         return False
 
     def verify_password(self, email: str, password: str) -> bool:
-        """Verificar la contraseña de un email."""
         user_info = self.get_user_info(email)
         if user_info and "password_hash" in user_info:
             stored_hash = user_info["password_hash"].encode('utf-8')
@@ -126,41 +239,33 @@ class AuthManager:
         return False
     
     def get_user_info(self, email: str) -> dict:
-        """Obtener información del usuario"""
         return self.users["users"].get(email.lower(), {})
     
     def is_admin(self, email: str) -> bool:
-        """Verificar si es administrador"""
         user_info = self.get_user_info(email)
         return user_info.get("is_admin", False)
     
     def get_all_users(self) -> list:
-        """Obtener todos los usuarios"""
         return [{"email": email, "info": info} for email, info in self.users["users"].items()]
     
     def update_last_login(self, email: str):
-        """Actualizar último login"""
         email = email.lower()
         if email in self.users["users"]:
             self.users["users"][email]["last_login"] = datetime.now().isoformat()
             self._save_users()
 
     def toggle_admin_status(self, email: str) -> bool:
-        """Cambiar el estado de administrador de un usuario."""
         email = email.lower()
         if email == self.admin_email.lower():
-            return False # No se puede cambiar el estado del admin principal
-        
+            return False
         if email in self.users["users"]:
             current_status = self.users["users"][email].get("is_admin", False)
             self.users["users"][email]["is_admin"] = not current_status
             self._save_users()
             return True
-        
         return False
     
     def update_user_settings(self, email: str, **settings) -> bool:
-        """Actualizar la configuración de un usuario."""
         email = email.lower()
         if email in self.users["users"]:
             for key, value in settings.items():
@@ -171,6 +276,7 @@ class AuthManager:
             self._save_users()
             return True
         return False
+
 def check_authentication():
     """Verificar autenticación y mostrar login con contraseña"""
     auth = AuthManager()
@@ -319,12 +425,18 @@ def check_authentication():
         st.stop()
     
     with st.sidebar:
-        st.success("Sesión activa")
         user_info = st.session_state.user_info
-        st.write(f"👤 **{user_info.get('name', 'Usuario')}**")
-        st.write(f"🏢 {user_info.get('business_name', 'N/A')}")
         
-        if st.button("Cerrar Sesión", use_container_width=True):
+        # Header profesional
+        st.markdown(f"""
+        <div style="padding: 1rem; background-color: #f0f2f6; border-radius: 8px; margin-bottom: 1rem;">
+            <div style="font-size: 0.8rem; color: #555;">Bienvenido,</div>
+            <div style="font-weight: bold; font-size: 1.1rem; color: #013366;">{user_info.get('name', 'Usuario')}</div>
+            <div style="font-size: 0.9rem; color: #fe933a;">{user_info.get('business_name', 'N/A')}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button(" Cerrar Sesión", use_container_width=True, type="secondary"):
             st.session_state.authenticated = False
             st.session_state.user_email = None
             st.session_state.user_info = None

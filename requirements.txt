@@ -8,3 +8,5 @@ numpy
 bcrypt
 
 notion-client
+gspread
+google-auth
