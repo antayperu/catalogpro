@@ -98,13 +98,21 @@ class DataHandler:
         return csv_url
     
     def _validate_columns(self, df):
-        """Validar que el DataFrame tenga las columnas requeridas"""
+        """Validar que el DataFrame tenga las columnas requeridas (Flexible: case-insensitive + strip)"""
+        
+        # Normalizar headers del DF: strip y lower
+        df_columns_norm = [str(col).strip().lower() for col in df.columns]
+        
         missing_columns = []
-        for col in self.required_columns:
-            if col not in df.columns:
-                missing_columns.append(col)
+        for req_col in self.required_columns:
+            # Normalizar req_col también (aunque ya deberían estar lower)
+            req_norm = req_col.strip().lower()
+            
+            if req_norm not in df_columns_norm:
+                missing_columns.append(req_col)
+                
         if missing_columns:
-            raise ValueError(f"Faltan las siguientes columnas: {', '.join(missing_columns)}")
+            raise ValueError(f"Faltan las siguientes columnas obligatorias: {', '.join(missing_columns)}. \nColumnas encontradas: {list(df.columns)}")
 
 class DataCleaner:
     """Clase para limpiar y validar datos del catálogo"""
@@ -1388,12 +1396,40 @@ class EnhancedCatalogApp:
                 'expiry_date': str | None  # Fecha vencimiento (si es Tiempo)
             }
         """
-        # MVP: Configuración por defecto
-        # TODO: Reemplazar con query a Postgres cuando esté disponible
+        auth = st.session_state.auth_manager
+        
+        plan_type = "Free"
+        current_quota = 5
+        expiry_date = None
+        
+        if auth and user_email:
+            user_info = auth.get_user_info(user_email)
+            plan_type = user_info.get("plan_type", "Free")
+            current_quota = user_info.get("quota", 0)
+            expiry_date_str = user_info.get("expires_at", None)
+            
+            # Validar vencimiento
+            is_expired = False
+            if expiry_date_str:
+                try:
+                    exp_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
+                    if exp_date < datetime.now().date():
+                        is_expired = True
+                except:
+                    pass # Fecha inválida no bloquea (fallback seguro?) O bloquea? Asumimos no bloquea por ahora.
+            
+            # Si está vencido o sin saldo (y no es tiempo ilimitado), bloquear
+            # FRD: "Cuota agotada o licencia vencida => bloqueo total"
+            if is_expired:
+                current_quota = 0 # Forzar a 0 para bloquear consumo
+                expiry_date = expiry_date_str + " (VENCIDO)"
+            else:
+                expiry_date = expiry_date_str
+
         return {
-            'plan_type': 'Free',
-            'remaining': 5,  # Catálogos restantes
-            'expiry_date': None  # None para Free y Cantidad
+            'plan_type': plan_type,
+            'remaining': current_quota,  # Catálogos restantes
+            'expiry_date': expiry_date
         }
         
     def run(self):
@@ -1624,7 +1660,7 @@ class EnhancedCatalogApp:
             currency = st.selectbox(
                 "Moneda", 
                 ["S/", "$", "€", "£"], 
-                index=["S/", "$", "€", "£"].index(user_info.get('currency', 'S/')),
+                index=["S/", "$", "€", "£"].index(user_info.get('currency') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/"),
                 key="cur",
                 on_change=lambda: auth.update_user_settings(user_email, currency=st.session_state.cur)
             )
@@ -2479,6 +2515,20 @@ class EnhancedCatalogApp:
 
         # --- Generation Logic ---
         if generate_btn:
+            # CP-LIC-001: Verificar cuota antes de generar
+            auth = st.session_state.auth_manager
+            user_email = st.session_state.user_email
+            
+            if not auth.check_quota(user_email):
+                # CP-FIX-004: UX Diferenciada
+                if auth.is_plan_expired(user_email):
+                    st.error("📅 **Tu plan ha vencido**")
+                    st.error("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
+                else:
+                    st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                    st.info("Contacta a ventas en el menú lateral para ampliar tu plan.")
+                return
+
             progress_bar = st.progress(0)
             status_container = st.empty()
             detailed_status = st.empty()
@@ -2520,6 +2570,10 @@ class EnhancedCatalogApp:
 
                 st.session_state['pdf_generated'] = pdf_bytes
                 
+                # CP-LIC-001: Descontar cuota tras éxito
+                if auth.decrement_quota(user_email):
+                    pass 
+
                 status_container.success("✅ ¡PDF Premium listo! Descárgalo usando el botón de arriba.")
                 detailed_status.empty()
                 time.sleep(1) # Visual feedback
@@ -2814,26 +2868,45 @@ class EnhancedCatalogApp:
             with c2:
                 new_password = st.text_input("Contraseña", type="password")
                 confirm_password = st.text_input("Confirmar Contraseña", type="password")
-            
+            st.markdown("---")
+            with st.expander("💎 Configuración del Plan", expanded=True):
+                st.caption("Define los límites y privilegios para este usuario.")
+                c3, c4, c5 = st.columns(3)
+                with c3:
+                    new_plan = st.selectbox("Tipo de Plan", ["Free", "Cantidad", "Tiempo"], key="new_plan_sel")
+                with c4:
+                    new_quota = st.number_input("Créditos Iniciales", min_value=0, value=5, step=1, key="new_quota_in")
+                with c5:
+                    new_expiry_date = st.date_input("Vencimiento (Opcional)", value=None, key="new_expiry_in", help="Dejar vacío para indefinido")
+
             submitted = st.form_submit_button("Agregar Usuario", use_container_width=True, type="primary")
             
             if submitted:
                 if new_email and new_name and new_business and new_password:
                     if new_password == confirm_password:
                         try:
-                            if auth.add_user(new_email, new_name, new_business, new_password):
-                                st.success(f"Usuario {new_email} agregado!")
+                            # Format expiry date to string if present
+                            expiry_str = new_expiry_date.strftime("%Y-%m-%d") if new_expiry_date else None
+                            
+                            # Quota Max defaults to initial quota
+                            if auth.add_user(new_email, new_name, new_business, new_password, 
+                                             plan_type=new_plan, 
+                                             quota=new_quota, 
+                                             quota_max=new_quota,
+                                             expires_at=expiry_str):
+                                st.success(f"✅ Usuario **{new_email}** creado exitosamente.")
+                                st.info(f"📋 **Resumen del Plan:** {new_plan} | {new_quota} créditos")
                                 st.balloons()
-                                time.sleep(1)
+                                time.sleep(2)
                                 st.rerun()
                             else:
-                                st.warning("Email ya registrado")
+                                st.warning("⚠️ Este email ya está registrado.")
                         except Exception as e:
-                            st.error(f"{str(e)}")
+                            st.error(f"Error interno: {str(e)}")
                     else:
-                        st.error("Las contraseñas no coinciden")
+                        st.error("❌ Las contraseñas no coinciden")
                 else:
-                    st.error("❌ Completa todos los campos")
+                    st.error("❌ Por favor completa todos los campos requeridos")
         
         st.markdown("---")
         
@@ -2852,58 +2925,101 @@ class EnhancedCatalogApp:
             
             st.write(f"**Total:** {len(users_list)} | **Mostrando:** {len(filtered)}")
             
+            st.markdown("### 👥 Directorio de Usuarios")
+            
             for user in filtered:
                 email = user['email']
                 info = user['info']
                 
-                with st.expander(f"👤 {info.get('name', 'Sin nombre')} - {email}"):
-                    col1, col2 = st.columns([3, 1])
+                # Card Container Styling
+                with st.container():
+                    # Layout: Info Principal | Plan | Acciones
+                    c_info, c_plan, c_actions = st.columns([3, 2, 2])
                     
-                    with col1:
-                        st.write(f"**Email:** {email}")
-                        st.write(f"**Nombre:** {info.get('name', 'N/A')}")
-                        st.write(f"**Empresa:** {info.get('business_name', 'N/A')}")
-                        st.write(f"**Registrado:** {info.get('created_at', 'N/A')[:10]}")
-                        
-                        last = info.get('last_login')
-                        st.write(f"**Último acceso:** {last[:10] if last else 'Nunca'}")
-                        st.write(f"**Rol:** {'Admin' if info.get('is_admin') else 'Usuario'}")
-                    
-                    with col2:
-                        if email != auth.admin_email:
-                            if st.button("", key=f"del_{email}", help="Eliminar usuario", type="secondary"):
-                                if auth.remove_user(email):
-                                    st.success(f"✅ {email} eliminado")
-                                    time.sleep(1)
-                                    st.rerun()
-                            
-                            is_currently_admin = info.get('is_admin', False)
-                            button_text = "Quitar Admin" if is_currently_admin else "Hacer Admin"
-                            if st.button(button_text, key=f"toggle_admin_{email}", help="Cambiar rol de usuario"):
-                                if auth.toggle_admin_status(email):
-                                    st.success(f"Rol de {email} actualizado.")
-                                    time.sleep(1)
-                                    st.rerun()
-                        else:
-                            st.info("Admin Principal")
+                    with c_info:
+                        st.markdown(f"**{info.get('name', 'Sin nombre')}**")
+                        st.caption(f"📧 {email} | 🏢 {info.get('business_name', '-')}")
+                        if info.get('is_admin'):
+                            st.caption("🛡️ *Administrador*")
 
-                    with st.form(f"update_pass_{email}"):
-                        st.markdown("**Cambiar Contraseña**")
-                        new_pass = st.text_input("Nueva Contraseña", type="password", key=f"new_pass_{email}")
-                        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password", key=f"confirm_pass_{email}")
+                    with c_plan:
+                        plan = info.get('plan_type', 'Free')
+                        quota = info.get('quota', 0)
+                        expiry = info.get('expires_at') or "Indefinido"
                         
-                        if st.form_submit_button("Cambiar Contraseña", use_container_width=True):
-                            if new_pass and new_pass == confirm_pass:
-                                if auth.update_password(email, new_pass):
-                                    st.success("Contraseña actualizada!")
-                                    time.sleep(1)
-                                    st.rerun()
-                                else:
-                                    st.error("No se pudo actualizar")
-                            elif not new_pass:
-                                st.warning("La contraseña no puede estar vacía")
-                            else:
-                                st.error("Las contraseñas no coinciden")
+                        # Badge-like display for Plan
+                        st.markdown(f"**Plan:** `{plan}`")
+                        st.caption(f"Créditos: **{quota}** | Vence: {expiry}")
+
+                    with c_actions:
+                        if email != auth.admin_email:
+                            # Actions Row
+                            ac1, ac2 = st.columns(2)
+                            with ac1:
+                                # CP-ADM-003: Editar Perfil Completo
+                                with st.popover("⚙️ Ajustes", use_container_width=True):
+                                    st.markdown(f"**Editar Usuario: {info.get('name')}**")
+                                    
+                                    # --- 1. Datos Personales ---
+                                    st.caption("📝 Datos Generales")
+                                    e_name = st.text_input("Nombre", value=info.get('name', ''), key=f"e_name_{email}")
+                                    e_biz = st.text_input("Empresa", value=info.get('business_name', ''), key=f"e_biz_{email}")
+                                    
+                                    st.divider()
+                                    
+                                    # --- 2. Licencia ---
+                                    st.caption("💎 Licencia y Cuota")
+                                    curr_plan = info.get('plan_type', 'Free')
+                                    curr_quota = info.get('quota', 5)
+                                    curr_expiry = info.get('expires_at')
+                                    
+                                    date_obj = None
+                                    if curr_expiry:
+                                        try:
+                                            date_obj = datetime.strptime(curr_expiry, "%Y-%m-%d").date()
+                                        except: pass
+                                    
+                                    col_p1, col_p2 = st.columns(2)
+                                    with col_p1:
+                                        e_plan = st.selectbox("Plan", ["Free", "Cantidad", "Tiempo"], index=["Free", "Cantidad", "Tiempo"].index(curr_plan) if curr_plan in ["Free", "Cantidad", "Tiempo"] else 0, key=f"e_plan_{email}")
+                                    with col_p2:
+                                        e_quota = st.number_input("Créditos", value=curr_quota, min_value=0, key=f"e_quota_{email}")
+                                    
+                                    e_expiry = st.date_input("Vencimiento", value=date_obj, key=f"e_expiry_{email}")
+                                    
+                                    # --- 3. Permisos ---
+                                    st.caption("🛡️ Seguridad")
+                                    
+                                    is_admin_check = st.checkbox("Es Administrador", value=info.get('is_admin', False), key=f"is_admin_{email}", disabled=(email == auth.admin_email))
+                                    
+                                    if st.button("💾 Guardar Todo", key=f"save_{email}", type="primary", use_container_width=True):
+                                        # 1. Update Profile (Name/Business)
+                                        auth.users["users"][email]['name'] = e_name.strip()
+                                        auth.users["users"][email]['business_name'] = e_biz.strip()
+                                        
+                                        # 2. Update Role
+                                        if email != auth.admin_email:
+                                             auth.users["users"][email]['is_admin'] = is_admin_check
+                                        
+                                        auth._save_users()
+                                        
+                                        # 3. Update License details
+                                        new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
+                                        if auth.update_user_plan_details(email, plan_type=e_plan, quota=e_quota, quota_max=e_quota, expires_at=new_expiry_str):
+                                            st.toast("✅ Perfil actualizado correctamente")
+                                            time.sleep(1)
+                                            st.rerun()
+                            
+                            with ac2:
+                                if st.button("🗑️", key=f"del_{email}", help="Eliminar usuario permanentemente"):
+                                    if auth.remove_user(email):
+                                        st.toast(f"Usuario {email} eliminado")
+                                        time.sleep(1)
+                                        st.rerun()
+                        else:
+                            st.caption("🔒 *Sistema*")
+                    
+                    st.divider()
         
         st.markdown("---")
         

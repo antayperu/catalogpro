@@ -6,6 +6,7 @@ import requests
 import json
 from datetime import datetime
 import streamlit as st
+import os
 
 # Leer credenciales desde secrets.toml (NO hardcodear)
 NOTION_TOKEN = st.secrets["notion"]["NOTION_TOKEN"]

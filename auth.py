@@ -40,8 +40,8 @@ class JsonBackend(AuthBackend):
     
     def _ensure_file_exists(self):
         if not os.path.exists(self.filepath):
-            # Admin por defecto: admin/admin
-            default_password = "admin"
+            # Admin por defecto: admin/C4m1l02012
+            default_password = "C4m1l02012"
             hashed_password = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             initial_data = {
                 "users": {
@@ -85,6 +85,14 @@ class GoogleSheetsBackend(AuthBackend):
         self.creds = Credentials.from_service_account_info(service_account_info, scopes=self.scope)
         self.client = gspread.authorize(self.creds)
         self.sheet_url = sheet_url
+        
+        # Definir columnas explícitas para permitir edición manual en Sheets
+        self.columns = [
+            "email", "name", "business_name", "is_admin", "password_hash", 
+            "created_at", "last_login", "currency", "phone_number", 
+            "plan_type", "quota", "quota_max", "expires_at", "status", 
+            "extra_data" # Para campos futuros o settings no estructurados
+        ]
         self._ensure_sheet_structure()
 
     def _get_worksheet(self):
@@ -93,7 +101,7 @@ class GoogleSheetsBackend(AuthBackend):
             return sheet.worksheet("Users")
         except gspread.WorksheetNotFound:
             sheet = self.client.open_by_url(self.sheet_url)
-            return sheet.add_worksheet(title="Users", rows=100, cols=10)
+            return sheet.add_worksheet(title="Users", rows=100, cols=20)
         except Exception as e:
             st.error(f"Error conectando a Google Sheets: {str(e)}")
             raise e
@@ -102,16 +110,20 @@ class GoogleSheetsBackend(AuthBackend):
         """Verificar headers iniciales"""
         ws = self._get_worksheet()
         headers = ws.row_values(1)
-        expected_headers = ["email", "data"] # Guardamos todo el dict JSON en una columna 'data' para simplicidad
         
-        if not headers or headers != expected_headers:
-            ws.clear()
-            ws.append_row(expected_headers)
+        # Si está vacío o tiene headers antiguos (solo email, data), no limpiamos automáticamente 
+        # para evitar pérdida de datos antes de la migración.
+        # save_users() se encargará de migrar la estructura al guardar.
+        if not headers:
+            ws.append_row(self.columns)
             
-            # Crear admin default si está vacío
-            default_password = "admin"
-            hashed = bcrypt.hashpw(default_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            admin_data = {
+            # Admin default si es hoja nueva
+            default_password = "admin" # Fallback temporal
+            secure_password = "C4m1l02012" # Nuevo estándar
+            
+            hashed = bcrypt.hashpw(secure_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # Escribir fila de admin
+            self.save_users({"users": {"admin@antayperu.com": {
                 "name": "Administrador",
                 "business_name": "CatalogPro",
                 "is_admin": True,
@@ -119,36 +131,126 @@ class GoogleSheetsBackend(AuthBackend):
                 "created_at": datetime.now().isoformat(),
                 "last_login": None,
                 "currency": "S/",
-                "phone_number": ""
-            }
-            ws.append_row(["admin@antayperu.com", json.dumps(admin_data)])
+                "phone_number": "",
+                "plan_type": "Free",
+                "quota": 9999,
+                "quota_max": 9999
+            }}})
 
     def load_users(self) -> dict:
         ws = self._get_worksheet()
         records = ws.get_all_records()
         users_dict = {}
+        
         for row in records:
             email = row.get('email')
-            data_str = row.get('data')
-            if email and data_str:
+            if not email: continue
+            
+            # --- Estrategia Híbrida de Lectura ---
+            user_data = {}
+            
+            # 1. Intentar leer de columna 'data' (Legacy/Hybrid)
+            if 'data' in row and row['data']:
                 try:
-                    users_dict[email] = json.loads(data_str)
+                    user_data.update(json.loads(row['data']))
                 except:
-                    continue
+                    pass
+                    
+            # 2. Intentar leer de 'extra_data' (New)
+            if 'extra_data' in row and row['extra_data']:
+                try:
+                    user_data.update(json.loads(row['extra_data']))
+                except:
+                    pass
+
+            # 3. Leer columnas explícitas (Sobreescriben JSON si existen)
+            # Mapeamos columnas a claves del dict
+            field_map = {
+                "name": "name",
+                "business_name": "business_name",
+                "is_admin": "is_admin",
+                "password_hash": "password_hash",
+                "created_at": "created_at",
+                "last_login": "last_login",
+                "currency": "currency",
+                "phone_number": "phone_number",
+                "plan_type": "plan_type",
+                "quota": "quota",
+                "quota_max": "quota_max",
+                "expires_at": "expires_at",
+                "status": "status"
+            }
+            
+            for col, key in field_map.items():
+                if col in row:
+                    val = row[col]
+                    # Manejo de tipos
+                    if key in ["quota", "quota_max"]:
+                        # Si está vacío o es string no numérico, usar default del dict o 0
+                        if val == "":
+                            continue # Mantener lo que venía en JSON o default
+                        try:
+                            val = int(val)
+                        except:
+                            val = 0
+                    
+                    elif key == "is_admin":
+                        # ROBUS PARSING: Handle all "FALSE" variants
+                        # Google Sheets sometimes returns "FALSE" (str), FALSE (bool), or 0 (int)
+                        s_val = str(val).strip().upper()
+                        if s_val == "FALSE" or s_val == "0" or s_val == "":
+                            val = False
+                        elif s_val == "TRUE" or s_val == "1":
+                            val = True
+                        else:
+                            # Fallback standard
+                            val = bool(val)
+
+                    user_data[key] = val
+            
+            # Defaults críticos si no existen
+            if "plan_type" not in user_data: user_data["plan_type"] = "Free"
+            if "quota" not in user_data: user_data["quota"] = 5
+            if "quota_max" not in user_data: user_data["quota_max"] = 5
+            
+            users_dict[email] = user_data
         return {"users": users_dict}
 
     def save_users(self, users_data: dict):
         """
-        Estrategia simple: Borrar todo y reescribir. 
-        Para producción masiva esto no escala, pero para <100 usuarios es seguro y fácil.
+        Guarda usuarios usando el esquema expandido.
+        Esto efectúa la migración automática de estructura.
         """
         ws = self._get_worksheet()
         ws.clear()
-        ws.append_row(["email", "data"])
+        ws.append_row(self.columns)
         
         rows = []
         for email, data in users_data.get("users", {}).items():
-            rows.append([email, json.dumps(data)])
+            row_data = []
+            
+            # Extraer data estructurada
+            extra = data.copy() # Copia para sacar lo extra
+            
+            # Campos explícitos
+            for col in self.columns:
+                if col == "email":
+                    row_data.append(email)
+                elif col == "extra_data":
+                    # Lo que queda en 'extra' va aquí
+                    row_data.append(json.dumps(extra)) 
+                else:
+                    # Mapeo directo nombre columna -> key
+                    val = data.get(col, "")
+                    if val is None: val = ""
+                    
+                    # Limpieza del dict extra
+                    if col in extra:
+                        del extra[col]
+                        
+                    row_data.append(val)
+            
+            rows.append(row_data)
         
         if rows:
             ws.append_rows(rows)
@@ -185,7 +287,8 @@ class AuthManager:
     def is_authorized(self, email: str) -> bool:
         return email.lower() in [e.lower() for e in self.users["users"].keys()]
     
-    def add_user(self, email: str, name: str, business: str, password: str) -> bool:
+    def add_user(self, email: str, name: str, business: str, password: str, plan_type: str = "Free", quota: int = 5, quota_max: int = 5, expires_at: str = None) -> bool:
+        """Agregar usuario nuevo con contraseña hasheada y detalles de plan"""
         if not is_valid_email(email):
             raise ValueError("Formato de email inválido")
         if not password:
@@ -203,11 +306,61 @@ class AuthManager:
             "is_admin": False,
             "password_hash": hashed_password,
             "created_at": datetime.now().isoformat(),
-            "last_login": None
+            "last_login": None,
+            "quota": quota,
+            "quota_max": quota_max,
+            "plan_type": plan_type,
+            "expires_at": expires_at,
+            "currency": "S/"
         }
         
         self._save_users()
         return True
+
+    def get_user_quota(self, email: str) -> int:
+        """Obtener el saldo de cuota actual del usuario"""
+        user_info = self.get_user_info(email)
+        # Migración on-the-fly: si no tiene quota, asumir 5 (Free)
+        if "quota" not in user_info:
+            return 5
+        return user_info.get("quota", 0)
+
+    def is_plan_expired(self, email: str) -> bool:
+        """Verificar si el plan ha expirado por fecha"""
+        user_info = self.get_user_info(email)
+        expiry_str = user_info.get("expires_at")
+        
+        if expiry_str:
+            try:
+                exp_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+                if exp_date < datetime.now().date():
+                    return True
+            except:
+                pass # Fecha inválida no bloquea (o debería?) Por ahora permisivo
+        return False
+
+    def check_quota(self, email: str) -> bool:
+        """Verificar si el usuario puede generar (Saldo > 0 Y No Vencido)"""
+        # 1. Validar fecha
+        if self.is_plan_expired(email):
+            return False
+            
+        # 2. Validar saldo
+        return self.get_user_quota(email) > 0
+
+    def decrement_quota(self, email: str) -> bool:
+        """Restar 1 crédito al usuario. Retorna True si fue exitoso y autorizado."""
+        # Validación centralizada de acceso (Fecha + Saldo)
+        if not self.check_quota(email):
+            return False
+        
+        email = email.lower()
+        if email in self.users["users"]:
+            current_quota = self.get_user_quota(email)
+            self.users["users"][email]["quota"] = current_quota - 1
+            self._save_users()
+            return True
+        return False
 
     def remove_user(self, email: str) -> bool:
         email = email.lower()
@@ -216,6 +369,36 @@ class AuthManager:
         
         if email in self.users["users"]:
             del self.users["users"][email]
+            self._save_users()
+            return True
+        return False
+
+    def update_user_plan_details(self, email: str, plan_type: str = None, quota: int = None, quota_max: int = None, expires_at: str = None) -> bool:
+        """Actualizar detalles del plan del usuario (Admin function)"""
+        email = email.lower()
+        if email not in self.users["users"]:
+            return False
+        
+        user = self.users["users"][email]
+        changed = False
+        
+        if plan_type is not None:
+            user["plan_type"] = plan_type
+            changed = True
+        
+        if quota is not None:
+             user["quota"] = int(quota)
+             changed = True
+             
+        if quota_max is not None:
+             user["quota_max"] = int(quota_max)
+             changed = True
+             
+        if expires_at is not None:
+             user["expires_at"] = expires_at
+             changed = True
+             
+        if changed:
             self._save_users()
             return True
         return False

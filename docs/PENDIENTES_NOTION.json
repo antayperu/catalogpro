@@ -77,7 +77,7 @@
       },
       "Estado": {
         "type": "select",
-        "value": "Sin Estado"
+        "value": "Done"
       },
       "Release/Tag": {
         "type": "rich_text",
@@ -130,7 +130,7 @@
       },
       "Estado": {
         "type": "select",
-        "value": "Sin Estado"
+        "value": "Done"
       },
       "Release/Tag": {
         "type": "rich_text",
@@ -183,7 +183,7 @@
       },
       "Estado": {
         "type": "select",
-        "value": "Sin Estado"
+        "value": "Done"
       },
       "Release/Tag": {
         "type": "rich_text",
@@ -289,7 +289,7 @@
       },
       "Estado": {
         "type": "select",
-        "value": "Ready"
+        "value": "Done"
       },
       "Release/Tag": {
         "type": "rich_text",
@@ -314,6 +314,430 @@
       "ID": {
         "type": "title",
         "value": "CP-LIC-003"
+      }
+    }
+  },
+  {
+    "id": "2f27544a-512b-814e-96db-f30e7930fac5",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Título \"Importar Datos\" con microcopy\nAC-02: Cero emojis en botones y headers\nAC-03: Estructura en expander colapsado\nAC-04: Mensajes de error descriptivos\nAC-05: Spinners durante carga\nAC-06: Funcionalidad intacta"
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": null
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": null
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "UI/UX"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Mejoras UX corporativas en tab Cargar:\n\nCAMBIOS IMPLEMENTADOS:\n✅ Título \"Importar Datos\" con microcopy explicativo\n✅ Eliminados emojis decorativos (🗑️, 👀, 📋)\n✅ Estructura de ejemplo en expander colapsado\n✅ Mensajes de error descriptivos con contexto\n✅ Spinners durante carga (\"Importando datos...\", \"Validando estructura...\")\n✅ Labels profesionales en inputs\n✅ Feedback con formato bold y captions explicativos\n\nBENEFICIOS:\n- Aspecto corporativo y profesional\n- Mejor guía para el usuario\n- Feedback claro en caso de error\n- Reducción de ruido visual"
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-UX-010"
+      }
+    }
+  },
+  {
+    "id": "2f27544a-512b-81fa-b8cb-cb5a6854565b",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: Búsqueda básica siempre visible.\nAC-02: Filtros avanzados colapsados por defecto.\nAC-03: Imágenes con aspect-ratio correcto, sin desenfoques.\nAC-04: Jerarquía visual: productos primero, controles segundo.\nAC-05: Funciona en móvil sin scroll horizontal."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "UX"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "HIGH"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "Mejora imperiosa para estándar premium Antay. Afecta percepción de calidad."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Screenshots antes/después. Video de interacción con filtros."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "UI/UX"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Refactorización UX del Tab Catálogo: Filtros progresivos, jerarquía visual mejorada, corrección de imágenes desenfocadas/descuadradas."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-UX-009"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-8103-a690-fa5b35278e8c",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: add_user() persiste usuarios correctamente en Google Sheets.\nAC-02: Usuarios creados pueden autenticarse inmediatamente.\nAC-03: No hay pérdida de datos al cerrar sesión.\nAC-04: Validación de duplicados funciona correctamente."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": ""
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST (BUG - HIGH)"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "BUG CRÍTICO. Severidad: HIGH. Detectado en QA Testing 24/01/2026. Bloquea funcionalidad de registro."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Test: crear usuario → cerrar sesión → login → verificar acceso. Captura de Sheet con usuario persistido."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Gestión de Usuarios con Problemas de Persistencia: Usuarios creados con add_user() no se persisten correctamente. Afecta registro de nuevos usuarios."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-BUG-013"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-8105-9486-d705a8251db1",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Bug"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": null
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Admin"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Fix Crítico Booleans y Fechas"
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-FIX-00X"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-8128-b6ae-fed5b78f7197",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Security"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": null
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Admin"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Auditoría de Roles y Seguridad"
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-ADM-004"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-81b1-9701-daf12589fb77",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Feature"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": null
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Admin"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Permitir Edición de Perfil Admin"
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-ADM-003"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-81d0-82cc-fdae7b9b7264",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": "AC-01: verify_password() valida correctamente contraseñas hasheadas.\nAC-02: Usuarios recién creados pueden autenticarse.\nAC-03: Hash de contraseña es compatible con verificación.\nAC-04: No hay falsos negativos en autenticación."
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": "CP-BUG-013"
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Funcional"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": "MUST (BUG - CRITICAL)"
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": "BUG CRÍTICO. Severidad: CRITICAL. Detectado en QA Testing 24/01/2026. Bloquea funcionalidad completa de autenticación."
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": "Antigravity"
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": "Test: crear usuario con contraseña → login inmediato → verificar acceso exitoso. Log de hash generado vs hash verificado."
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Licencias"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Verificación de Contraseñas Falla: verify_password() no puede verificar contraseñas de usuarios recién creados. Los usuarios no pueden autenticarse después del registro."
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-BUG-014"
+      }
+    }
+  },
+  {
+    "id": "2f47544a-512b-81d6-9dd6-eb4c18ebfdaa",
+    "properties": {
+      "AC (Criterios de aceptación)": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Dependencias": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Tipo": {
+        "type": "select",
+        "value": "Feature"
+      },
+      "Prioridad": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Notas": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Estado": {
+        "type": "select",
+        "value": "Done"
+      },
+      "Release/Tag": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Owner": {
+        "type": "select",
+        "value": null
+      },
+      "Evidencia": {
+        "type": "rich_text",
+        "value": null
+      },
+      "Módulo": {
+        "type": "select",
+        "value": "Admin"
+      },
+      "Descripción": {
+        "type": "rich_text",
+        "value": "Implementar Edición Completa de Usuarios"
+      },
+      "ID": {
+        "type": "title",
+        "value": "CP-ADM-002"
       }
     }
   }
