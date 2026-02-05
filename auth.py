@@ -268,12 +268,12 @@ class AuthManager:
                     st.secrets["gcp_service_account"],
                     st.secrets["general"]["auth_sheet_url"]
                 )
-                print("✅ Usando GoogleSheetsBackend")
+                print("[OK] Usando GoogleSheetsBackend")
             except Exception as e:
-                print(f"⚠️ Fallo al conectar Sheets ({e}), usando JsonBackend")
+                print(f"[WARNING] Fallo al conectar Sheets ({e}), usando JsonBackend")
                 self.backend = JsonBackend()
         else:
-            print("ℹ️ No hay credenciales GCP, usando JsonBackend")
+            print("[INFO] No hay credenciales GCP, usando JsonBackend")
             self.backend = JsonBackend()
             
         self._load_users()
