@@ -4,8 +4,13 @@ import streamlit as st
 from notion_client import Client
 
 # SECURE: Load from Streamlit secrets (local: .streamlit/secrets.toml, cloud: App Settings)
-NOTION_TOKEN = st.secrets.get("NOTION_TOKEN", os.getenv("NOTION_TOKEN", ""))
-PAGE_ID = st.secrets.get("NOTION_PAGE_ID", "2377544a-512b-804d-b020-d8e8b62fd00d") 
+# Try to read from [notion] section first, then fallback to root level
+if "notion" in st.secrets:
+    NOTION_TOKEN = st.secrets["notion"].get("NOTION_TOKEN", "")
+    PAGE_ID = st.secrets["notion"].get("NOTION_PAGE_ID", "2377544a-512b-804d-b020-d8e8b62fd00d")
+else:
+    NOTION_TOKEN = st.secrets.get("NOTION_TOKEN", os.getenv("NOTION_TOKEN", ""))
+    PAGE_ID = st.secrets.get("NOTION_PAGE_ID", "2377544a-512b-804d-b020-d8e8b62fd00d") 
 
 OUTPUT_FILE = "docs/ANTAY_METHODOLOGY.md"
 
