@@ -3,8 +3,8 @@
 Sistema de creacion de catalogos digitales profesionales a partir de hojas de calculo.
 
 ---
-**Version:** v1.3.1 (Hotfix)
-**Fecha:** 29/12/2025
+**Version:** v1.4.0
+**Fecha:** 05/02/2026
 
 ---
 
