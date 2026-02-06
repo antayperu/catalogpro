@@ -2939,8 +2939,21 @@ class EnhancedCatalogApp:
                     with c_info:
                         st.markdown(f"**{info.get('name', 'Sin nombre')}**")
                         st.caption(f"📧 {email} | 🏢 {info.get('business_name', '-')}")
+
+                        # Indicadores de status
+                        status_indicators = []
                         if info.get('is_admin'):
-                            st.caption("🛡️ *Administrador*")
+                            status_indicators.append("🛡️ *Administrador*")
+
+                        # Indicador de estado (activo/bloqueado)
+                        user_status = info.get('status', 'active')
+                        if user_status == 'blocked':
+                            status_indicators.append("🔒 **BLOQUEADO**")
+                        else:
+                            status_indicators.append("✅ *Activo*")
+
+                        if status_indicators:
+                            st.caption(" | ".join(status_indicators))
 
                     with c_plan:
                         plan = info.get('plan_type', 'Free')
@@ -3011,11 +3024,31 @@ class EnhancedCatalogApp:
                                             st.rerun()
                             
                             with ac2:
-                                if st.button("🗑️", key=f"del_{email}", help="Eliminar usuario permanentemente"):
-                                    if auth.remove_user(email):
-                                        st.toast(f"Usuario {email} eliminado")
-                                        time.sleep(1)
-                                        st.rerun()
+                                # Determinar estado actual del usuario
+                                user_status = info.get('status', 'active')
+                                is_blocked = (user_status == 'blocked')
+
+                                # Boton dinamico segun estado
+                                if is_blocked:
+                                    # Usuario bloqueado -> Mostrar boton de desbloqueo
+                                    if st.button("🔓", key=f"unblock_{email}", help="Desbloquear usuario"):
+                                        if auth.unblock_user(email):
+                                            st.toast(f"✅ Usuario {email} desbloqueado")
+                                            print(f"[ADMIN ACTION] {st.session_state.user_email} desbloqueo a {email}")
+                                            time.sleep(1)
+                                            st.rerun()
+                                        else:
+                                            st.error("Error al desbloquear usuario")
+                                else:
+                                    # Usuario activo -> Mostrar boton de bloqueo
+                                    if st.button("🔒", key=f"block_{email}", help="Bloquear usuario"):
+                                        if auth.block_user(email):
+                                            st.toast(f"🔒 Usuario {email} bloqueado")
+                                            print(f"[ADMIN ACTION] {st.session_state.user_email} bloqueo a {email}")
+                                            time.sleep(1)
+                                            st.rerun()
+                                        else:
+                                            st.error("Error al bloquear usuario")
                         else:
                             st.caption("🔒 *Sistema*")
                     
