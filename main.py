@@ -1440,7 +1440,23 @@ class EnhancedCatalogApp:
         # Calcular is_admin una sola vez
         is_admin = False
         if st.session_state.get("authenticated"):
-            is_admin = auth.is_admin(st.session_state.user_email)
+            user_email = st.session_state.user_email
+
+            # Validar que el usuario no este bloqueado
+            if auth.is_user_blocked(user_email):
+                st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
+                st.warning("Tu sesión ha sido cerrada automáticamente.")
+                print(f"[SESSION TERMINATED] Usuario bloqueado detectado en sesión activa: {user_email}")
+
+                # Limpiar sesión
+                st.session_state.authenticated = False
+                st.session_state.user_email = None
+                st.session_state.user_info = None
+
+                time.sleep(2)
+                st.rerun()
+
+            is_admin = auth.is_admin(user_email)
 
         # DESPUÉS: Continuar normal
         self.setup_styles()

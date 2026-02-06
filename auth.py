@@ -813,6 +813,11 @@ def check_authentication():
                         if auth.is_authorized(email) and auth.verify_password(email, password):
                             # Validar que el usuario NO este bloqueado
                             if auth.is_user_blocked(email):
+                                # Limpiar cualquier sesión existente
+                                st.session_state.authenticated = False
+                                st.session_state.user_email = None
+                                st.session_state.user_info = None
+
                                 st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
                                 print(f"[LOGIN BLOCKED] Intento de login de usuario bloqueado: {email}")
                                 return
