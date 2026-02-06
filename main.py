@@ -2508,14 +2508,35 @@ class EnhancedCatalogApp:
                 if compatibility_mode:
                     use_optimized = False
                     st.info("ℹ️ Modo compatibilidad activado: Motor Legacy sin optimizaciones")
-        
+
+        # CP-LIC-002: Verificar cuota ANTES de mostrar botones
+        auth = st.session_state.auth_manager
+        user_email = st.session_state.user_email
+        plan_status = self.get_user_plan_status(user_email)
+        has_quota = auth.check_quota(user_email)
+        is_expired = auth.is_plan_expired(user_email)
+
+        # Mostrar advertencia si no hay cuota
+        if not has_quota:
+            if is_expired:
+                st.error("📅 **Tu plan ha vencido**")
+                st.info("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
+            else:
+                st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                st.info("📱 Contacta a ventas en el menú lateral para ampliar tu plan.")
+
         c_action, c_download = st.columns([1, 2])
-            
+
         with c_action:
-            # Disable if already generating handled by Streamlit spinner mostly, 
-            # but we can use session state to show different label if needed.
-            generate_btn = st.button("⚡ Descargar PDF Premium", type="primary", use_container_width=True)
-            
+            # Deshabilitar botón si no hay cuota
+            generate_btn = st.button(
+                "⚡ Descargar PDF Premium",
+                type="primary",
+                use_container_width=True,
+                disabled=not has_quota,
+                help="Genera un nuevo catálogo PDF" if has_quota else "❌ Sin créditos disponibles"
+            )
+
         with c_download:
             if 'pdf_generated' in st.session_state and st.session_state['pdf_generated']:
                 st.download_button(
@@ -2524,7 +2545,9 @@ class EnhancedCatalogApp:
                     file_name=f"catalogo_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf",
                     type="secondary",
-                    use_container_width=True
+                    use_container_width=True,
+                    disabled=not has_quota,
+                    help="Descarga el último PDF generado" if has_quota else "❌ Sin créditos disponibles"
                 )
             else:
                 st.caption("👈 Genera el PDF primero para descargar.")
