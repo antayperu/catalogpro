@@ -687,6 +687,151 @@ class AuthManager:
             return True
         return False
 
+    def change_password(self, email: str, current_password: str, new_password: str) -> dict:
+        """
+        Cambia la contraseña del usuario verificando la actual.
+        
+        Args:
+            email: Email del usuario
+            current_password: Contraseña actual para verificación
+            new_password: Nueva contraseña a establecer
+        
+        Returns:
+            dict: {
+                "success": bool,
+                "message": str,
+                "error_code": str (opcional: "INVALID_CURRENT", "SAME_PASSWORD", "TOO_SHORT")
+            }
+        """
+        try:
+            email = email.lower().strip()
+            
+            # 1. Verificar que el usuario existe
+            if email not in self.users["users"]:
+                return {
+                    "success": False,
+                    "message": "Usuario no encontrado",
+                    "error_code": "USER_NOT_FOUND"
+                }
+            
+            user_data = self.users["users"][email]
+            stored_hash = user_data.get("password_hash", "")
+            
+            # 2. Verificar contraseña actual
+            if not bcrypt.checkpw(current_password.encode('utf-8'), stored_hash.encode('utf-8')):
+                return {
+                    "success": False,
+                    "message": "La contraseña actual es incorrecta",
+                    "error_code": "INVALID_CURRENT"
+                }
+            
+            # 3. Validar longitud mínima
+            if len(new_password) < 6:
+                return {
+                    "success": False,
+                    "message": "La contraseña debe tener al menos 6 caracteres",
+                    "error_code": "TOO_SHORT"
+                }
+            
+            # 4. Verificar que la nueva sea diferente a la actual
+            if bcrypt.checkpw(new_password.encode('utf-8'), stored_hash.encode('utf-8')):
+                return {
+                    "success": False,
+                    "message": "La nueva contraseña debe ser diferente a la actual",
+                    "error_code": "SAME_PASSWORD"
+                }
+            
+            # 5. Generar nuevo hash
+            new_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            # 6. Actualizar en base de datos
+            self.users["users"][email]["password_hash"] = new_hash
+            self._save_users()
+            
+            print(f"[OK] Contraseña actualizada para: {email}")
+            
+            return {
+                "success": True,
+                "message": "Contraseña actualizada correctamente"
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] change_password: {str(e)}")
+            return {
+                "success": False,
+                "message": "Error al cambiar la contraseña. Por favor intenta de nuevo.",
+                "error_code": "SYSTEM_ERROR"
+            }
+
+    def admin_reset_password(self, admin_email: str, target_email: str, new_password: str) -> dict:
+        """
+        Admin resetea la contraseña de otro usuario.
+        
+        Args:
+            admin_email: Email del administrador que realiza el reseteo
+            target_email: Email del usuario cuya contraseña será reseteada
+            new_password: Nueva contraseña a establecer
+        
+        Returns:
+            dict: {"success": bool, "message": str, "error_code": str (opcional)}
+        """
+        try:
+            admin_email = admin_email.lower().strip()
+            target_email = target_email.lower().strip()
+            
+            # 1. Verificar que quien ejecuta es admin
+            if admin_email not in self.users["users"]:
+                return {
+                    "success": False,
+                    "message": "Administrador no encontrado",
+                    "error_code": "ADMIN_NOT_FOUND"
+                }
+            
+            if not self.users["users"][admin_email].get("is_admin", False):
+                return {
+                    "success": False,
+                    "message": "No tienes permisos de administrador",
+                    "error_code": "NOT_ADMIN"
+                }
+            
+            # 2. Verificar que el usuario objetivo existe
+            if target_email not in self.users["users"]:
+                return {
+                    "success": False,
+                    "message": f"Usuario {target_email} no encontrado",
+                    "error_code": "TARGET_NOT_FOUND"
+                }
+            
+            # 3. Validar longitud mínima
+            if len(new_password) < 6:
+                return {
+                    "success": False,
+                    "message": "La contraseña debe tener al menos 6 caracteres",
+                    "error_code": "TOO_SHORT"
+                }
+            
+            # 4. Generar nuevo hash
+            new_hash = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            
+            # 5. Actualizar en base de datos
+            self.users["users"][target_email]["password_hash"] = new_hash
+            self._save_users()
+            
+            print(f"[ADMIN] {admin_email} reseteó password de {target_email}")
+            
+            return {
+                "success": True,
+                "message": f"Contraseña de {target_email} reseteada correctamente"
+            }
+            
+        except Exception as e:
+            print(f"[ERROR] admin_reset_password: {str(e)}")
+            return {
+                "success": False,
+                "message": "Error al resetear la contraseña. Por favor intenta de nuevo.",
+                "error_code": "SYSTEM_ERROR"
+            }
+
 def check_authentication():
     """Verificar autenticación y mostrar login con contraseña"""
     auth = AuthManager()

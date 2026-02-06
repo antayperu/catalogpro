@@ -1770,7 +1770,7 @@ class EnhancedCatalogApp:
     def render_main_content(self, is_admin):
         # Define Tabs
         # Base tabs
-        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email"]
+        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email", "🔐 Seguridad"]
         if is_admin:
              tabs_titles.append("👨‍💼 Admin")
         
@@ -1801,7 +1801,7 @@ class EnhancedCatalogApp:
              else:
                  st.info("Módulo WhatsApp en construcción")
              
-        # 3. Exportar
+        # 3. Exportar (PDF)
         with tabs[3]:
             # Export tab - Decoupled
             self.render_export_options()
@@ -1813,13 +1813,62 @@ class EnhancedCatalogApp:
              else:
                  st.info("Módulo Email en construcción")
 
-        # 5. Admin (Optional)
-        if is_admin and len(tabs) > 5:
-            with tabs[5]:
+        # 5. Seguridad (Nuevo Feature CP-FEAT-016)
+        with tabs[5]:
+            self.render_security_tab()
+
+        # 6. Admin (Opcional)
+        if is_admin and len(tabs) > 6:
+            with tabs[6]:
                 if hasattr(self, 'render_admin_panel'):
                     self.render_admin_panel()
                 else:
                     st.warning("Panel de Admin no encontrado")
+
+    def render_security_tab(self):
+        """Tab de seguridad para cambio de contraseña"""
+        st.header("🔐 Seguridad")
+        st.markdown("Gestiona la seguridad de tu cuenta.")
+        
+        c1, c2 = st.columns([1, 2])
+        
+        with c1:
+            st.info("ℹ️ **Importante:** Al cambiar tu contraseña, se cerrará tu sesión automáticamente para verificar las nuevas credenciales.")
+            
+        with c2:
+            with st.form("change_password_form", clear_on_submit=True):
+                st.subheader("Cambiar Contraseña")
+                current_pass = st.text_input("Contraseña Actual", type="password")
+                new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
+                confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
+                
+                submitted = st.form_submit_button("Actualizar Contraseña", type="primary", use_container_width=True)
+                
+                if submitted:
+                    auth = st.session_state.auth_manager
+                    user_email = st.session_state.user_email
+                    
+                    if not current_pass or not new_pass:
+                        st.error("❌ Todos los campos son obligatorios")
+                    elif new_pass != confirm_pass:
+                        st.error("❌ Las nuevas contraseñas no coinciden")
+                    elif len(new_pass) < 6:
+                        st.error("❌ La contraseña debe tener al menos 6 caracteres")
+                    else:
+                        with st.spinner("Actualizando..."):
+                            result = auth.change_password(user_email, current_pass, new_pass)
+                            
+                        if result["success"]:
+                            st.success("✅ Contraseña actualizada exitosamente")
+                            st.balloons()
+                            time.sleep(2)
+                            # Logout for security
+                            st.session_state.authenticated = False
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {result['message']}")
+                            if result.get("error_code") == "INVALID_CURRENT":
+                                st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
     
     def render_empty_state(self, tipo, context=''):
         states = {
@@ -2948,6 +2997,43 @@ class EnhancedCatalogApp:
                 else:
                     st.error("❌ Por favor completa todos los campos requeridos")
         
+        st.markdown("---")
+        
+        # CP-FEAT-016: Admin Reset Password
+        st.subheader("🔐 Gestión de Accesos")
+        with st.expander("Restablecer Contraseña de Usuario", expanded=False):
+            st.info("⚠️ Esta acción cambiará la contraseña del usuario inmediatamente.")
+            
+            all_users = auth.get_all_users()
+            # Sort for better UX
+            user_options = sorted([u['email'] for u in all_users])
+            
+            # Select User
+            selected_user_reset = st.selectbox("Seleccionar Usuario", user_options, key="reset_user_sel")
+            
+            if selected_user_reset:
+                with st.form("admin_reset_pass_form"):
+                    st.write(f"Reseteando contraseña para: **{selected_user_reset}**")
+                    c_res1, c_res2 = st.columns(2)
+                    with c_res1:
+                        new_reset_pass = st.text_input("Nueva Contraseña", type="password", key="arp_new")
+                    with c_res2:
+                        confirm_reset_pass = st.text_input("Confirmar Contraseña", type="password", key="arp_confirm")
+                    
+                    if st.form_submit_button("Restablecer Contraseña", type="primary"):
+                        if not new_reset_pass:
+                            st.error("La contraseña no puede estar vacía")
+                        elif new_reset_pass != confirm_reset_pass:
+                            st.error("Las contraseñas no coinciden")
+                        elif len(new_reset_pass) < 6:
+                            st.error("La contraseña debe tener al menos 6 caracteres")
+                        else:
+                            res = auth.admin_reset_password(st.session_state.user_email, selected_user_reset, new_reset_pass)
+                            if res["success"]:
+                                st.success(f"✅ Contraseña para {selected_user_reset} restablecida.")
+                            else:
+                                st.error(f"❌ Error: {res.get('message', 'Error desconocido')}")
+
         st.markdown("---")
         
         st.subheader("Usuarios Autorizados")
