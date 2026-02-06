@@ -16,6 +16,13 @@ try:
 except ImportError:
     HAS_GSPREAD = False
 
+# Intentar importar supabase, manejar error si no está instalado
+try:
+    from supabase import create_client, Client
+    HAS_SUPABASE = True
+except ImportError:
+    HAS_SUPABASE = False
+
 def is_valid_email(email: str) -> bool:
     """Validar formato de email"""
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -255,14 +262,136 @@ class GoogleSheetsBackend(AuthBackend):
         if rows:
             ws.append_rows(rows)
 
+class SupabaseBackend(AuthBackend):
+    """Backend de autenticación con Supabase PostgreSQL"""
+
+    def __init__(self, supabase_url: str, supabase_key: str):
+        """
+        Args:
+            supabase_url: URL del proyecto Supabase (https://xxxxx.supabase.co)
+            supabase_key: Service role key (para operaciones admin)
+        """
+        if not HAS_SUPABASE:
+            raise ImportError("supabase no está instalado. Ejecuta: pip install supabase")
+
+        self.client: Client = create_client(supabase_url, supabase_key)
+        self.table = "users"
+
+    def load_users(self) -> dict:
+        """
+        Carga todos los usuarios desde Supabase.
+
+        Returns:
+            dict: {"users": {email: user_data, ...}}
+        """
+        try:
+            response = self.client.table(self.table).select("*").execute()
+
+            users = {}
+            for row in response.data:
+                email = row["email"]
+
+                # Convertir tipos de Supabase a tipos Python
+                user_data = {
+                    "name": row.get("name", "Usuario"),
+                    "business_name": row.get("business_name", ""),
+                    "phone_number": row.get("phone_number", ""),
+                    "currency": row.get("currency", "S/"),
+                    "pdf_custom_title": row.get("pdf_custom_title"),
+                    "pdf_custom_subtitle": row.get("pdf_custom_subtitle"),
+                    "is_admin": bool(row.get("is_admin", False)),
+                    "status": row.get("status", "active"),
+                    "password_hash": row.get("password_hash"),
+                    "plan_type": row.get("plan_type", "Free"),
+                    "quota": int(row.get("quota", 5)),
+                    "quota_max": int(row.get("quota_max", 5)),
+                    "expires_at": row.get("expires_at"),  # None o fecha en formato ISO
+                    "created_at": row.get("created_at"),
+                    "last_login": row.get("last_login")
+                }
+
+                users[email] = user_data
+
+            return {"users": users}
+
+        except Exception as e:
+            print(f"[ERROR] Fallo al cargar usuarios desde Supabase: {e}")
+            return {"users": {}}
+
+    def save_users(self, users_data: dict):
+        """
+        Guarda usuarios en Supabase usando UPSERT.
+
+        Args:
+            users_data: dict con clave "users" que contiene {email: user_dict}
+        """
+        users_dict = users_data.get("users", {})
+
+        for email, user_data in users_dict.items():
+            try:
+                # Preparar datos para Supabase
+                supabase_data = {
+                    "email": email,
+                    "password_hash": user_data.get("password_hash"),
+                    "name": user_data.get("name", "Usuario"),
+                    "business_name": user_data.get("business_name", ""),
+                    "phone_number": user_data.get("phone_number", ""),
+                    "currency": user_data.get("currency", "S/"),
+                    "pdf_custom_title": user_data.get("pdf_custom_title"),
+                    "pdf_custom_subtitle": user_data.get("pdf_custom_subtitle"),
+                    "is_admin": bool(user_data.get("is_admin", False)),
+                    "status": user_data.get("status", "active"),
+                    "plan_type": user_data.get("plan_type", "Free"),
+                    "quota": int(user_data.get("quota", 5)),
+                    "quota_max": int(user_data.get("quota_max", 5)),
+                    "expires_at": user_data.get("expires_at"),  # None o string ISO
+                    "created_at": user_data.get("created_at"),
+                    "last_login": user_data.get("last_login")
+                }
+
+                # UPSERT: Inserta si no existe, actualiza si existe
+                self.client.table(self.table).upsert(supabase_data).execute()
+
+            except Exception as e:
+                print(f"[ERROR] Fallo al guardar usuario {email}: {e}")
+                # Continuar con otros usuarios aunque uno falle
+
 class AuthManager:
     """Gestor de autenticación con soporte híbrido"""
     
     def __init__(self):
         self.admin_email = "admin@antayperu.com"
-        
-        # Determinar backend
-        if "gcp_service_account" in st.secrets and "auth_sheet_url" in st.secrets.get("general", {}):
+
+        # Determinar backend (prioridad: Supabase > Google Sheets > JSON)
+        # Prioridad 1: Supabase (PostgreSQL - PRODUCCIÓN)
+        if "supabase" in st.secrets:
+            try:
+                self.backend = SupabaseBackend(
+                    st.secrets["supabase"]["SUPABASE_URL"],
+                    st.secrets["supabase"]["SUPABASE_KEY"]
+                )
+                print("[OK] Usando SupabaseBackend (PostgreSQL)")
+
+            except Exception as e:
+                print(f"[WARNING] Fallo al conectar Supabase ({e}), probando Google Sheets...")
+
+                # Prioridad 2: Google Sheets (deprecated/fallback)
+                if "gcp_service_account" in st.secrets and "auth_sheet_url" in st.secrets.get("general", {}):
+                    try:
+                        self.backend = GoogleSheetsBackend(
+                            st.secrets["gcp_service_account"],
+                            st.secrets["general"]["auth_sheet_url"]
+                        )
+                        print("[OK] Usando GoogleSheetsBackend (fallback)")
+                    except Exception as e2:
+                        print(f"[WARNING] Google Sheets también falló ({e2}), usando JsonBackend")
+                        self.backend = JsonBackend()
+                else:
+                    print("[INFO] Sin credenciales Google Sheets, usando JsonBackend")
+                    self.backend = JsonBackend()
+
+        # Prioridad 2: Google Sheets (si no hay Supabase)
+        elif "gcp_service_account" in st.secrets and "auth_sheet_url" in st.secrets.get("general", {}):
             try:
                 self.backend = GoogleSheetsBackend(
                     st.secrets["gcp_service_account"],
@@ -272,10 +401,12 @@ class AuthManager:
             except Exception as e:
                 print(f"[WARNING] Fallo al conectar Sheets ({e}), usando JsonBackend")
                 self.backend = JsonBackend()
+
+        # Prioridad 3: JsonBackend (fallback final - siempre funciona)
         else:
-            print("[INFO] No hay credenciales GCP, usando JsonBackend")
+            print("[INFO] No hay credenciales cloud, usando JsonBackend")
             self.backend = JsonBackend()
-            
+
         self._load_users()
     
     def _load_users(self):
@@ -363,10 +494,24 @@ class AuthManager:
         return False
 
     def remove_user(self, email: str) -> bool:
+        """
+        [DEPRECATED] Eliminar usuario permanentemente.
+
+        NOTA: Este metodo esta deprecado desde v1.5.1 (CP-FEAT-015).
+        Usar `block_user()` en su lugar para operaciones normales.
+        Solo mantener para testing/desarrollo.
+
+        Args:
+            email: Email del usuario a eliminar
+
+        Returns:
+            bool: True si fue eliminado, False si no se pudo
+        """
+        print("[WARNING] remove_user() esta deprecado. Usar block_user() en su lugar.")
         email = email.lower()
         if email == self.admin_email.lower():
             return False
-        
+
         if email in self.users["users"]:
             del self.users["users"][email]
             self._save_users()
@@ -447,7 +592,89 @@ class AuthManager:
             self._save_users()
             return True
         return False
-    
+
+    def block_user(self, email: str) -> bool:
+        """
+        Bloquear usuario (cambiar status a 'blocked').
+
+        Args:
+            email: Email del usuario a bloquear
+
+        Returns:
+            bool: True si fue bloqueado exitosamente, False si no se pudo
+
+        Restricciones:
+            - No se puede bloquear al admin principal
+            - No se puede bloquear a un usuario ya bloqueado
+        """
+        email = email.lower()
+
+        # Proteccion: No bloquear al admin principal
+        if email == self.admin_email.lower():
+            print(f"[WARNING] Intento de bloquear admin principal bloqueado: {email}")
+            return False
+
+        # Verificar que el usuario existe
+        if email not in self.users["users"]:
+            print(f"[WARNING] Usuario no encontrado para bloqueo: {email}")
+            return False
+
+        # Verificar estado actual
+        current_status = self.users["users"][email].get("status", "active")
+        if current_status == "blocked":
+            print(f"[INFO] Usuario ya estaba bloqueado: {email}")
+            return False
+
+        # Bloquear usuario
+        self.users["users"][email]["status"] = "blocked"
+        self._save_users()
+
+        print(f"[OK] Usuario bloqueado exitosamente: {email}")
+        return True
+
+    def unblock_user(self, email: str) -> bool:
+        """
+        Desbloquear usuario (cambiar status a 'active').
+
+        Args:
+            email: Email del usuario a desbloquear
+
+        Returns:
+            bool: True si fue desbloqueado exitosamente, False si no se pudo
+        """
+        email = email.lower()
+
+        # Verificar que el usuario existe
+        if email not in self.users["users"]:
+            print(f"[WARNING] Usuario no encontrado para desbloqueo: {email}")
+            return False
+
+        # Verificar estado actual
+        current_status = self.users["users"][email].get("status", "active")
+        if current_status == "active":
+            print(f"[INFO] Usuario ya estaba activo: {email}")
+            return False
+
+        # Desbloquear usuario
+        self.users["users"][email]["status"] = "active"
+        self._save_users()
+
+        print(f"[OK] Usuario desbloqueado exitosamente: {email}")
+        return True
+
+    def is_user_blocked(self, email: str) -> bool:
+        """
+        Verificar si un usuario esta bloqueado.
+
+        Args:
+            email: Email del usuario
+
+        Returns:
+            bool: True si esta bloqueado, False si esta activo o no existe
+        """
+        user_info = self.get_user_info(email)
+        return user_info.get("status", "active") == "blocked"
+
     def update_user_settings(self, email: str, **settings) -> bool:
         email = email.lower()
         if email in self.users["users"]:
@@ -584,6 +811,13 @@ def check_authentication():
                     if email and password:
                         email = email.strip()
                         if auth.is_authorized(email) and auth.verify_password(email, password):
+                            # Validar que el usuario NO este bloqueado
+                            if auth.is_user_blocked(email):
+                                st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
+                                print(f"[LOGIN BLOCKED] Intento de login de usuario bloqueado: {email}")
+                                return
+
+                            # Login exitoso
                             st.session_state.authenticated = True
                             st.session_state.user_email = email
                             st.session_state.user_info = auth.get_user_info(email)
