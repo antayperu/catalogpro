@@ -820,7 +820,7 @@ def check_authentication():
 
                                 st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
                                 print(f"[LOGIN BLOCKED] Intento de login de usuario bloqueado: {email}")
-                                return
+                                st.stop()  # Detener completamente la ejecución de Streamlit
 
                             # Login exitoso
                             st.session_state.authenticated = True
