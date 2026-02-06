@@ -2530,7 +2530,7 @@ class EnhancedCatalogApp:
         with c_action:
             # Deshabilitar botón si no hay cuota
             generate_btn = st.button(
-                "⚡ Descargar PDF Premium",
+                "⚡ Generar y Descargar PDF Premium",
                 type="primary",
                 use_container_width=True,
                 disabled=not has_quota,
@@ -2540,17 +2540,18 @@ class EnhancedCatalogApp:
         with c_download:
             if 'pdf_generated' in st.session_state and st.session_state['pdf_generated']:
                 st.download_button(
-                    label="⬇️ Descargar PDF (Último)",
+                    label="⬇️ Descargar PDF Nuevamente",
                     data=st.session_state['pdf_generated'],
                     file_name=f"catalogo_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf",
                     type="secondary",
                     use_container_width=True,
-                    disabled=not has_quota,
-                    help="Descarga el último PDF generado" if has_quota else "❌ Sin créditos disponibles"
+                    disabled=False,  # CP-BUG-013: Permitir descargar PDF ya generado aunque no haya cuota
+                    help="Descarga nuevamente el último PDF generado (sin consumir crédito adicional)"
                 )
             else:
                 st.caption("👈 Genera el PDF primero para descargar.")
+                st.info("💡 **Nota:** La generación consume 1 crédito. Puedes re-descargar el mismo PDF sin costo adicional.")
 
         # --- Generation Logic ---
         if generate_btn:
