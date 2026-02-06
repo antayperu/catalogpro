@@ -52,7 +52,7 @@ El sistema soporta **dos backends** de autenticación intercambiables:
 - Contraseñas hasheadas con bcrypt
 - Sistema de cuotas (Free vs Licencias pagadas)
 - Validación de fecha de expiración
-- Usuario admin por defecto: `admin@antayperu.com` / `C4m1l02012`
+- Usuario admin por defecto: `admin@antayperu.com` / `admin`
 
 ##### Backends Disponibles (v1.5.0+)
 

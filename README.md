@@ -10,7 +10,7 @@ Sistema de creacion de catalogos digitales profesionales a partir de hojas de ca
 
 ## 📋 Changelog
 
-### v1.5.1 (06/02/2026) - CP-FEAT-015
+### v1.5.1 (06/02/2026) - CP-FEAT-015 y Corrección Documentación
 **Bloqueo/Desbloqueo de Usuarios**
 - ✅ Agregar métodos `block_user()` y `unblock_user()` en AuthManager
 - ✅ Validación de status en login (usuarios bloqueados no pueden acceder)
@@ -19,6 +19,7 @@ Sistema de creacion de catalogos digitales profesionales a partir de hojas de ca
 - ✅ Protección del admin principal (no se puede bloquear)
 - ⚠️ `remove_user()` deprecado (usar `block_user()` en su lugar)
 - 📖 Cumple con FRD v1.1 §5.1 línea 134 (no eliminar usuarios)
+- 🔧 **Corrección Documentación**: Contraseña admin correcta es `admin` (no `C4m1l02012`)
 
 ### v1.5.0 (05/02/2026)
 - ✅ Migración a Supabase como backend principal
