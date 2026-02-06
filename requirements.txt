@@ -10,3 +10,4 @@ bcrypt
 notion-client
 gspread
 google-auth
+supabase
