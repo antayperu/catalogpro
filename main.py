@@ -1632,15 +1632,51 @@ class EnhancedCatalogApp:
         </style>
         """, unsafe_allow_html=True)
         
+
     def render_header(self):
-        st.markdown("""
-        <div class="main-header">
-            <h1>CatalogPro Enhanced</h1>
-            <p>Catálogos profesionales mejorados</p>
-            <span class="feature-badge">v1.2</span>
-            <span class="feature-badge">PDF</span>
-            <span class="easy-badge">Email Fácil</span>
-            <span class="ux-badge">UX Mejorada</span>
+        # CP-UX-021: Header Corporativo Premium
+        ver = version.__version__
+        st.markdown(f"""
+        <style>
+        .premium-header {{
+            background: linear-gradient(135deg, #013366 0%, #001f3f 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            color: white;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        .header-content h1 {{
+            color: white !important;
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }}
+        .header-content p {{
+            color: #bdc3c7;
+            margin: 0;
+            font-size: 0.9rem;
+        }}
+        .version-badge {{
+            background: rgba(255,255,255,0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255,255,255,0.2);
+        }}
+        </style>
+        
+        <div class="premium-header">
+            <div class="header-content">
+                <h1>CatalogPro Enhanced</h1>
+                <p>Suite de Gestión de Catálogos & Ventas</p>
+            </div>
+            <div>
+                <span class="version-badge">v{ver}</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1692,105 +1728,142 @@ class EnhancedCatalogApp:
         
         st.sidebar.markdown("---")
 
-        with st.sidebar.expander("🏢 Negocio", expanded=True):
-            business_name = st.text_input(
-                "Nombre", 
-                user_info.get('business_name', 'Mi Empresa'), 
-                key="biz",
-                on_change=lambda: auth.update_user_settings(user_email, business_name=st.session_state.biz)
-            )
-            currency = st.selectbox(
-                "Moneda", 
-                ["S/", "$", "€", "£"], 
-                index=["S/", "$", "€", "£"].index(user_info.get('currency') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/"),
-                key="cur",
-                on_change=lambda: auth.update_user_settings(user_email, currency=st.session_state.cur)
-            )
-            phone_number = st.text_input(
-                "Número de WhatsApp", 
-                user_info.get('phone_number', ''),
-                placeholder="Ej: 51987654321", 
-                key="phone",
-                on_change=lambda: auth.update_user_settings(user_email, phone_number=st.session_state.phone)
-            )
+        # CP-UX-020: Formulario con Botón Guardar (Sin autosave)
+        with st.sidebar.form("settings_form"):
+            with st.expander("🏢 Negocio", expanded=True):
+                business_name_input = st.text_input(
+                    "Nombre", 
+                    user_info.get('business_name', 'Mi Empresa'), 
+                    key="biz"
+                )
+                currency_input = st.selectbox(
+                    "Moneda", 
+                    ["S/", "$", "€", "£"], 
+                    index=["S/", "$", "€", "£"].index(user_info.get('currency') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/"),
+                    key="cur"
+                )
+                phone_number_input = st.text_input(
+                    "Número de WhatsApp", 
+                    user_info.get('phone_number', ''),
+                    placeholder="Ej: 51987654321", 
+                    key="phone"
+                )
 
-        with st.sidebar.expander("🎨 Diseño", expanded=False):
-            columns = st.slider("Columnas", 1, 4, 3, key="col")
-            uploaded_logo = st.file_uploader("Logo", type=['png','jpg','jpeg'], key="log")
-            if uploaded_logo:
-                st.image(uploaded_logo, width=200)
-                st.session_state.logo = uploaded_logo
-            else:
-                st.session_state.logo = None
-            
-            pdf_custom_title = st.text_input(
-                "Título PDF", 
-                user_info.get('pdf_custom_title', ''), 
-                key="pdf_title",
-                on_change=lambda: auth.update_user_settings(user_email, pdf_custom_title=st.session_state.pdf_title)
-            )
-            pdf_custom_subtitle = st.text_input(
-                "Subtítulo PDF", 
-                user_info.get('pdf_custom_subtitle', ''), 
-                key="pdf_subtitle",
-                on_change=lambda: auth.update_user_settings(user_email, pdf_custom_subtitle=st.session_state.pdf_subtitle)
-            )
-            st.session_state.pdf_columns = st.slider("Columnas PDF", 1, 3, 2, key="pdf_col")
-            
-            # CP-UX-PDF-006: Layout Switch
-            pdf_layout = st.selectbox(
-                "Diseño del PDF",
-                ["Profesional (v2)", "Clásico (v1)"],
-                index=0, # Default to Pro
-                key="pdf_layout_choice",
-                help="Pro: Diseño corporativo, imágenes fijas, cero 'nan'. Clásico: Versión anterior."
-            )
-            st.session_state.pdf_use_pro = (pdf_layout == "Profesional (v2)")
+            with st.expander("🎨 Diseño", expanded=False):
+                columns_input = st.slider("Columnas", 1, 4, int(user_info.get('columns_catalog', 3)), key="col")
+                
+                # CP-UX-018: Logic Logo Persistence
+                st.markdown("**Logotipo**")
+                
+                # Show saved logo logic
+                current_logo_b64 = user_info.get('logo_base64')
+                if current_logo_b64:
+                    try:
+                        # Decode for preview
+                        image_data = base64.b64decode(current_logo_b64)
+                        st.image(image_data, caption="Logo Actual", width=150)
+                    except:
+                        st.caption("Error mostrando logo actual")
+                
+                uploaded_logo = st.file_uploader("Actualizar Logo", type=['png','jpg','jpeg'], key="log")
+                
+                pdf_custom_title_input = st.text_input(
+                    "Título PDF", 
+                    user_info.get('pdf_custom_title', ''), 
+                    key="pdf_title"
+                )
+                pdf_custom_subtitle_input = st.text_input(
+                    "Subtítulo PDF", 
+                    user_info.get('pdf_custom_subtitle', ''), 
+                    key="pdf_subtitle"
+                )
+                # Ensure integer conversion for slider
+                default_pdf_cols = int(user_info.get('pdf_columns', 2))
+                pdf_columns_input = st.slider("Columnas PDF", 1, 3, default_pdf_cols, key="pdf_col")
+                
+                # CP-UX-PDF-006: Layout Switch
+                pdf_layout_input = st.selectbox(
+                    "Diseño del PDF",
+                    ["Profesional (v2)", "Clásico (v1)"],
+                    index=0, # Default to Pro
+                    key="pdf_layout_choice",
+                    help="Pro: Diseño corporativo, imágenes fijas, cero 'nan'."
+                )
 
-        # CP-FEAT-007: Branding Configuration
-        with st.sidebar.expander("🎨 Configuración de Marca (Nuevo)", expanded=False):
-            st.caption("Personaliza los colores de tu catálogo")
-            
-            # Defaults
-            DEFAULT_COLORS = {
-                'primary': '#2c3e50',   # Dark Blue
-                'secondary': '#e74c3c', # Red
-                'accent': '#3498db',    # Light Blue
-                'text': '#2c3e50'       # Dark Gray
-            }
-            
-            if st.button("Restaurar colores por defecto", key="reset_brand"):
-                st.session_state.brand_primary = DEFAULT_COLORS['primary']
-                st.session_state.brand_secondary = DEFAULT_COLORS['secondary']
-                st.session_state.brand_accent = DEFAULT_COLORS['accent']
-                st.session_state.brand_text = DEFAULT_COLORS['text']
-                st.rerun()
+            # CP-FEAT-007: Branding Configuration
+            with st.expander("🎨 Configuración de Marca", expanded=False):
+                # Defaults
+                DEFAULT_COLORS = {
+                    'primary': '#2c3e50',   # Dark Blue
+                    'secondary': '#e74c3c', # Red
+                    'accent': '#3498db',    # Light Blue
+                    'text': '#2c3e50'       # Dark Gray
+                }
+                
+                c_b1, c_b2 = st.columns(2)
+                brand_primary = c_b1.color_picker("Primario", st.session_state.get('brand_primary', DEFAULT_COLORS['primary']))
+                brand_secondary = c_b2.color_picker("Secundario", st.session_state.get('brand_secondary', DEFAULT_COLORS['secondary']))
+                
+                c_b3, c_b4 = st.columns(2)
+                brand_accent = c_b3.color_picker("Acento", st.session_state.get('brand_accent', DEFAULT_COLORS['accent']))
+                brand_text = c_b4.color_picker("Texto", st.session_state.get('brand_text', DEFAULT_COLORS['text']))
 
-            c_b1, c_b2 = st.columns(2)
-            brand_primary = c_b1.color_picker("Primario (Títulos)", st.session_state.get('brand_primary', DEFAULT_COLORS['primary']), key="brand_primary")
-            brand_secondary = c_b2.color_picker("Secundario (Destacado)", st.session_state.get('brand_secondary', DEFAULT_COLORS['secondary']), key="brand_secondary")
-            
-            c_b3, c_b4 = st.columns(2)
-            brand_accent = c_b3.color_picker("Acento (Detalles)", st.session_state.get('brand_accent', DEFAULT_COLORS['accent']), key="brand_accent")
-            brand_text = c_b4.color_picker("Texto Principal", st.session_state.get('brand_text', DEFAULT_COLORS['text']), key="brand_text")
-            
-            # Store in session for easy access
-            st.session_state.branding_config = {
-                'primary': brand_primary,
-                'secondary': brand_secondary,
-                'accent': brand_accent,
-                'text': brand_text
-            }
-        
-        st.session_state.business_name = business_name
-        st.session_state.currency = currency
-        st.session_state.columns = columns
-        st.session_state.phone_number = phone_number
-        st.session_state.pdf_custom_title = pdf_custom_title
-        st.session_state.pdf_custom_subtitle = pdf_custom_subtitle
+            # Botón Guardar (CP-UX-020)
+            submitted_settings = st.form_submit_button("💾 Guardar Configuración", use_container_width=True, type="primary")
+
+        if submitted_settings:
+            with st.spinner("Guardando cambios..."):
+                updates = {
+                    "business_name": business_name_input,
+                    "currency": currency_input,
+                    "phone_number": phone_number_input,
+                    "columns_catalog": columns_input,
+                    "pdf_custom_title": pdf_custom_title_input,
+                    "pdf_custom_subtitle": pdf_custom_subtitle_input,
+                    "pdf_columns": pdf_columns_input,
+                    # Branding
+                    "brand_primary": brand_primary,
+                    "brand_secondary": brand_secondary, 
+                    "brand_accent": brand_accent,
+                    "brand_text": brand_text
+                }
+                
+                # Check Logo Update
+                if uploaded_logo:
+                     try:
+                        bytes_data = uploaded_logo.getvalue()
+                        b64_logo = base64.b64encode(bytes_data).decode('utf-8')
+                        updates["logo_base64"] = b64_logo
+                        # Also update session state for immediate use
+                        st.session_state.logo = uploaded_logo 
+                     except Exception as e:
+                        st.warning(f"Error procesando logo: {e}")
+
+                if auth.update_user_settings(user_email, **updates):
+                     st.success("✅ ¡Configuración guardada exitosamente!")
+                     # Update session state caches
+                     st.session_state.business_name = business_name_input
+                     st.session_state.currency = currency_input
+                     st.session_state.pdf_custom_title = pdf_custom_title_input
+                     st.session_state.pdf_custom_subtitle = pdf_custom_subtitle_input
+                     st.session_state.pdf_use_pro = (pdf_layout_input == "Profesional (v2)")
+                     
+                     st.session_state.brand_primary = brand_primary
+                     st.session_state.brand_secondary = brand_secondary
+                     st.session_state.brand_accent = brand_accent
+                     st.session_state.brand_text = brand_text
+                     
+                     time.sleep(1)
+                     st.rerun()
+                else:
+                     st.error("Error al guardar en base de datos.")
+
+        # Sync session state outside form to ensure other modules see it
+        st.session_state.business_name = user_info.get('business_name', 'Mi Empresa')
+        st.session_state.currency = user_info.get('currency', 'S/')
         
         st.sidebar.markdown("---")
-        st.sidebar.caption("v1.3.1 (Hotfix) - 29/12/2025")
+        st.sidebar.caption(f"v{version.__version__}")
 
                 
     def render_main_content(self, is_admin):

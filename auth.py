@@ -303,11 +303,14 @@ class SupabaseBackend(AuthBackend):
                     "status": row.get("status", "active"),
                     "password_hash": row.get("password_hash"),
                     "plan_type": row.get("plan_type", "Free"),
+
                     "quota": int(row.get("quota", 5)),
                     "quota_max": int(row.get("quota_max", 5)),
                     "expires_at": row.get("expires_at"),  # None o fecha en formato ISO
                     "created_at": row.get("created_at"),
-                    "last_login": row.get("last_login")
+                    "last_login": row.get("last_login"),
+                    "logo_base64": row.get("logo_base64"),
+                    "logo_path": row.get("logo_path")
                 }
 
                 users[email] = user_data
@@ -329,6 +332,7 @@ class SupabaseBackend(AuthBackend):
 
         for email, user_data in users_dict.items():
             try:
+
                 # Preparar datos para Supabase
                 supabase_data = {
                     "email": email,
@@ -344,9 +348,11 @@ class SupabaseBackend(AuthBackend):
                     "plan_type": user_data.get("plan_type", "Free"),
                     "quota": int(user_data.get("quota", 5)),
                     "quota_max": int(user_data.get("quota_max", 5)),
-                    "expires_at": user_data.get("expires_at"),  # None o string ISO
+                    "expires_at": user_data.get("expires_at"),
                     "created_at": user_data.get("created_at"),
-                    "last_login": user_data.get("last_login")
+                    "last_login": user_data.get("last_login"),
+                    "logo_base64": user_data.get("logo_base64"),
+                    "logo_path": user_data.get("logo_path")
                 }
 
                 # UPSERT: Inserta si no existe, actualiza si existe
@@ -675,6 +681,7 @@ class AuthManager:
         user_info = self.get_user_info(email)
         return user_info.get("status", "active") == "blocked"
 
+
     def update_user_settings(self, email: str, **settings) -> bool:
         email = email.lower()
         if email in self.users["users"]:
@@ -686,6 +693,17 @@ class AuthManager:
             self._save_users()
             return True
         return False
+
+    def update_user_logo(self, email: str, logo_data: str, is_base64: bool = True) -> bool:
+        """
+        Actualiza el logo del usuario.
+        Args:
+            email: Email del usuario
+            logo_data: Datos del logo (base64 string o path)
+            is_base64: True si es base64, False si es path
+        """
+        key = "logo_base64" if is_base64 else "logo_path"
+        return self.update_user_settings(email, **{key: logo_data})
 
     def change_password(self, email: str, current_password: str, new_password: str) -> dict:
         """
