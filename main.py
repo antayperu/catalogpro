@@ -596,9 +596,35 @@ class EnhancedPDFExporter:
             except Exception as e:
                 pass
 
-        story.append(Paragraph(business_name, title_style))
-        story.append(Paragraph(f"Catálogo de Productos - {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('Date', parent=self.styles['Normal'], alignment=TA_CENTER)))
-        story.append(Spacer(1, 30))
+
+        # --- TITLE & SUBTITLE (CP-BUG-019) ---
+        # Logic to retrieve custom title/subtitle from session state
+        user_config = st.session_state.get('user', {})
+        custom_title = user_config.get('pdf_custom_title') or business_name
+        custom_subtitle = user_config.get('pdf_custom_subtitle')
+        
+        # 1. Title
+        story.append(Paragraph(custom_title, title_style))
+        
+        # 2. Subtitle (if available) or Date
+        if custom_subtitle:
+            subtitle_style = ParagraphStyle(
+                'CustomSubtitle',
+                parent=self.styles['Normal'],
+                fontSize=12,
+                alignment=TA_CENTER,
+                textColor=colors.HexColor('#7f8c8d'),
+                spaceAfter=10
+            )
+            story.append(Paragraph(custom_subtitle, subtitle_style))
+            # Also add date smaller below if subtitle exists? Or replace? 
+            # Prompt implies just rendering them. Let's keep date as well for professionalism.
+            story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('DateSmall', parent=self.styles['Normal'], fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor('#bdc3c7'))))
+        else:
+            # Default behavior (Date)
+            story.append(Paragraph(f"Catálogo de Productos - {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('Date', parent=self.styles['Normal'], alignment=TA_CENTER)))
+
+        story.append(Spacer(1, 20))
         story.append(PageBreak()) # Start products on Page 2
         
         # --- HIERARCHY PROCESSING ---
