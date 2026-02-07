@@ -19,6 +19,7 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from auth import check_authentication, AuthManager
+import version
 from reportlab.pdfgen import canvas
 import time
 
@@ -574,19 +575,42 @@ class EnhancedPDFExporter:
         prod_desc_style = ParagraphStyle('ProdDesc', parent=self.styles['Normal'], fontSize=8, leading=10, textColor=colors.HexColor('#7f8c8d'))
         prod_meta_style = ParagraphStyle('ProdMeta', parent=self.styles['Normal'], fontSize=9, leading=11, textColor=colors.HexColor(branding['primary']))
 
+
         # --- COVER PAGE ---
-        # Logo (Only on Page 1)
+        # Logo Logic (CP-BUG-019 fix: Support both session upload and DB persistence)
+        logo_to_render = None
+        user_info = st.session_state.get('user_info', {})
+        
+        # 1. Try Session State (Fresh upload)
         if hasattr(st.session_state, 'logo') and st.session_state.logo:
             try:
+                logo_to_render = Image.open(st.session_state.logo)
+            except:
+                pass
+        
+        # 2. Try DB Persistence (Base64) if no fresh upload
+        if not logo_to_render and user_info.get('logo_base64'):
+            try:
+                b64_data = user_info.get('logo_base64')
+                # Handle potential header in base64 string
+                if "," in b64_data:
+                    b64_data = b64_data.split(",")[1]
+                logo_bytes = base64.b64decode(b64_data)
+                logo_to_render = Image.open(io.BytesIO(logo_bytes))
+            except Exception as e:
+                print(f"Error loading logo from DB: {e}")
+                pass
+
+        if logo_to_render:
+            try:
                 # Use standard PIL Image -> Bytes -> RLImage flow to be safe
-                logo_pil = Image.open(st.session_state.logo)
                 # Resize if too big (max width 300)
-                if logo_pil.width > 300:
-                    ratio = 300 / logo_pil.width
-                    logo_pil = logo_pil.resize((300, int(logo_pil.height * ratio)), Image.Resampling.LANCZOS)
+                if logo_to_render.width > 300:
+                    ratio = 300 / logo_to_render.width
+                    logo_to_render = logo_to_render.resize((300, int(logo_to_render.height * ratio)), Image.Resampling.LANCZOS)
                 
                 logo_buf = io.BytesIO()
-                logo_pil.save(logo_buf, format='PNG')
+                logo_to_render.save(logo_buf, format='PNG')
                 logo_buf.seek(0)
                 
                 rl_logo = RLImage(logo_buf)
@@ -599,9 +623,9 @@ class EnhancedPDFExporter:
 
         # --- TITLE & SUBTITLE (CP-BUG-019) ---
         # Logic to retrieve custom title/subtitle from session state
-        user_config = st.session_state.get('user', {})
-        custom_title = user_config.get('pdf_custom_title') or business_name
-        custom_subtitle = user_config.get('pdf_custom_subtitle')
+        # FIX: Use 'user_info' which is populated by AuthManager
+        custom_title = user_info.get('pdf_custom_title') or business_name
+        custom_subtitle = user_info.get('pdf_custom_subtitle')
         
         # 1. Title
         story.append(Paragraph(custom_title, title_style))
@@ -617,14 +641,13 @@ class EnhancedPDFExporter:
                 spaceAfter=10
             )
             story.append(Paragraph(custom_subtitle, subtitle_style))
-            # Also add date smaller below if subtitle exists? Or replace? 
-            # Prompt implies just rendering them. Let's keep date as well for professionalism.
+            # Also add date smaller below if subtitle exists for context
             story.append(Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('DateSmall', parent=self.styles['Normal'], fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor('#bdc3c7'))))
         else:
             # Default behavior (Date)
             story.append(Paragraph(f"Catálogo de Productos - {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('Date', parent=self.styles['Normal'], alignment=TA_CENTER)))
 
-        story.append(Spacer(1, 20))
+        story.append(Spacer(1, 40))
         story.append(PageBreak()) # Start products on Page 2
         
         # --- HIERARCHY PROCESSING ---
@@ -1680,6 +1703,7 @@ class EnhancedCatalogApp:
         </div>
         """, unsafe_allow_html=True)
     
+
     def render_sidebar(self, is_admin):
         st.sidebar.header("📊 Configuración")
         
@@ -1728,142 +1752,168 @@ class EnhancedCatalogApp:
         
         st.sidebar.markdown("---")
 
-        # CP-UX-020: Formulario con Botón Guardar (Sin autosave)
-        with st.sidebar.form("settings_form"):
-            with st.expander("🏢 Negocio", expanded=True):
-                business_name_input = st.text_input(
-                    "Nombre", 
-                    user_info.get('business_name', 'Mi Empresa'), 
-                    key="biz"
-                )
-                currency_input = st.selectbox(
-                    "Moneda", 
-                    ["S/", "$", "€", "£"], 
-                    index=["S/", "$", "€", "£"].index(user_info.get('currency') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/"),
-                    key="cur"
-                )
-                phone_number_input = st.text_input(
-                    "Número de WhatsApp", 
-                    user_info.get('phone_number', ''),
-                    placeholder="Ej: 51987654321", 
-                    key="phone"
-                )
 
-            with st.expander("🎨 Diseño", expanded=False):
-                columns_input = st.slider("Columnas", 1, 4, int(user_info.get('columns_catalog', 3)), key="col")
-                
-                # CP-UX-018: Logic Logo Persistence
-                st.markdown("**Logotipo**")
-                
-                # Show saved logo logic
-                current_logo_b64 = user_info.get('logo_base64')
-                if current_logo_b64:
-                    try:
-                        # Decode for preview
-                        image_data = base64.b64decode(current_logo_b64)
-                        st.image(image_data, caption="Logo Actual", width=150)
-                    except:
-                        st.caption("Error mostrando logo actual")
-                
-                uploaded_logo = st.file_uploader("Actualizar Logo", type=['png','jpg','jpeg'], key="log")
-                
-                pdf_custom_title_input = st.text_input(
-                    "Título PDF", 
-                    user_info.get('pdf_custom_title', ''), 
-                    key="pdf_title"
-                )
-                pdf_custom_subtitle_input = st.text_input(
-                    "Subtítulo PDF", 
-                    user_info.get('pdf_custom_subtitle', ''), 
-                    key="pdf_subtitle"
-                )
-                # Ensure integer conversion for slider
-                default_pdf_cols = int(user_info.get('pdf_columns', 2))
-                pdf_columns_input = st.slider("Columnas PDF", 1, 3, default_pdf_cols, key="pdf_col")
-                
-                # CP-UX-PDF-006: Layout Switch
-                pdf_layout_input = st.selectbox(
-                    "Diseño del PDF",
-                    ["Profesional (v2)", "Clásico (v1)"],
-                    index=0, # Default to Pro
-                    key="pdf_layout_choice",
-                    help="Pro: Diseño corporativo, imágenes fijas, cero 'nan'."
-                )
+        # CP-UX-020: Formulario con Detección de Cambios (Change Detection)
+        # Metodología Antay: Baseline vs Current
+        
+        # A) BASELINE (Línea Base)
+        # Inicializar baseline solo si no existe o si cambió el usuario
+        # Normalizamos valores: None -> "" para texto, int para números
+        if 'cfg_baseline' not in st.session_state or st.session_state.get('cfg_user_key') != user_email:
+            st.session_state['cfg_baseline'] = {
+                'business_name': str(user_info.get('business_name') or ''),
+                'currency': user_info.get('currency', 'S/') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/",
+                'phone_number': str(user_info.get('phone_number') or ''),
+                'columns_catalog': int(user_info.get('columns_catalog', 3)),
+                'pdf_custom_title': str(user_info.get('pdf_custom_title') or ''),
+                'pdf_custom_subtitle': str(user_info.get('pdf_custom_subtitle') or ''),
+                'pdf_columns': int(user_info.get('pdf_columns', 2)),
+                'pdf_use_pro': bool(user_info.get('pdf_use_pro', True) if 'pdf_use_pro' in user_info else True),
+                'brand_primary': st.session_state.get('brand_primary') or '#2c3e50',
+                'brand_secondary': st.session_state.get('brand_secondary') or '#e74c3c',
+                'brand_accent': st.session_state.get('brand_accent') or '#3498db',
+                'brand_text': st.session_state.get('brand_text') or '#2c3e50'
+            }
+            st.session_state['cfg_user_key'] = user_email
+            
+        baseline = st.session_state['cfg_baseline']
 
-            # CP-FEAT-007: Branding Configuration
-            with st.expander("🎨 Configuración de Marca", expanded=False):
-                # Defaults
-                DEFAULT_COLORS = {
-                    'primary': '#2c3e50',   # Dark Blue
-                    'secondary': '#e74c3c', # Red
-                    'accent': '#3498db',    # Light Blue
-                    'text': '#2c3e50'       # Dark Gray
-                }
-                
-                c_b1, c_b2 = st.columns(2)
-                brand_primary = c_b1.color_picker("Primario", st.session_state.get('brand_primary', DEFAULT_COLORS['primary']))
-                brand_secondary = c_b2.color_picker("Secundario", st.session_state.get('brand_secondary', DEFAULT_COLORS['secondary']))
-                
-                c_b3, c_b4 = st.columns(2)
-                brand_accent = c_b3.color_picker("Acento", st.session_state.get('brand_accent', DEFAULT_COLORS['accent']))
-                brand_text = c_b4.color_picker("Texto", st.session_state.get('brand_text', DEFAULT_COLORS['text']))
+        # B) LAYOUT & WIDGETS
+        # Usamos keys únicos para evitar conflictos
+        with st.sidebar.expander("🏢 Negocio", expanded=True):
+            cfg_business_name = st.text_input("Nombre", value=baseline['business_name'], key="cfg_business_name")
+            cfg_currency = st.selectbox("Moneda", ["S/", "$", "€", "£"], index=["S/", "$", "€", "£"].index(baseline['currency']), key="cfg_currency")
+            cfg_phone = st.text_input("Número de WhatsApp", value=baseline['phone_number'], placeholder="Ej: 51987654321", key="cfg_phone")
 
-            # Botón Guardar (CP-UX-020)
-            submitted_settings = st.form_submit_button("💾 Guardar Configuración", use_container_width=True, type="primary")
+        with st.sidebar.expander("🎨 Diseño", expanded=False):
+            cfg_columns = st.slider("Columnas", 1, 4, baseline['columns_catalog'], key="cfg_columns")
+            
+            # Logo Handling
+            st.markdown("**Logotipo**")
+            current_logo_b64 = user_info.get('logo_base64')
+            if current_logo_b64:
+                try:
+                    if "," in current_logo_b64: current_logo_b64 = current_logo_b64.split(",")[1]
+                    image_data = base64.b64decode(current_logo_b64)
+                    st.image(image_data, caption="Logo Actual", width=150)
+                except:
+                    pass
+            
+            uploaded_logo = st.file_uploader("Actualizar Logo", type=['png','jpg','jpeg'], key="cfg_logo_upload")
+            
+            cfg_pdf_title = st.text_input("Título PDF", value=baseline['pdf_custom_title'], key="cfg_pdf_title")
+            cfg_pdf_subtitle = st.text_input("Subtítulo PDF", value=baseline['pdf_custom_subtitle'], key="cfg_pdf_subtitle")
+            cfg_pdf_cols = st.slider("Columnas PDF", 1, 3, baseline['pdf_columns'], key="cfg_pdf_cols")
+            
+            # Map Pro Layout boolean to index for Selectbox
+            layout_idx = 0 if baseline['pdf_use_pro'] else 1
+            cfg_pdf_layout_str = st.selectbox(
+                "Diseño del PDF",
+                ["Profesional (v2)", "Clásico (v1)"],
+                index=layout_idx,
+                key="cfg_pdf_layout"
+            )
 
-        if submitted_settings:
+        with st.sidebar.expander("🎨 Configuración de Marca", expanded=False):
+            # Defaults
+            DEFAULT_COLORS = {'primary': '#2c3e50', 'secondary': '#e74c3c', 'accent': '#3498db', 'text': '#2c3e50'}
+            # Fallback logic for Baseline vs Session vs Defaults
+            # Here baseline should rule what shows up in the picker initially
+            
+            c_b1, c_b2 = st.columns(2)
+            cfg_brand_primary = c_b1.color_picker("Primario", value=baseline['brand_primary'], key="cfg_brand_primary")
+            cfg_brand_secondary = c_b2.color_picker("Secundario", value=baseline['brand_secondary'], key="cfg_brand_secondary")
+            
+            c_b3, c_b4 = st.columns(2)
+            cfg_brand_accent = c_b3.color_picker("Acento", value=baseline['brand_accent'], key="cfg_brand_accent")
+            cfg_brand_text = c_b4.color_picker("Texto", value=baseline['brand_text'], key="cfg_brand_text")
+
+        # C) NORMALIZACIÓN & DETECCIÓN (Change Detection)
+        
+        # Construct Current State
+        current = {
+            'business_name': str(cfg_business_name or ''),
+            'currency': cfg_currency,
+            'phone_number': str(cfg_phone or ''),
+            'columns_catalog': int(cfg_columns),
+            'pdf_custom_title': str(cfg_pdf_title or ''),
+            'pdf_custom_subtitle': str(cfg_pdf_subtitle or ''),
+            'pdf_columns': int(cfg_pdf_cols),
+            'pdf_use_pro': bool(cfg_pdf_layout_str == "Profesional (v2)"),
+            'brand_primary': cfg_brand_primary,
+            'brand_secondary': cfg_brand_secondary,
+            'brand_accent': cfg_brand_accent,
+            'brand_text': cfg_brand_text
+        }
+        
+        # Compare vs Baseline
+        is_dirty = False
+        
+        # Helper: Loose string comparison
+        def is_diff(a, b):
+            return str(a).strip() != str(b).strip()
+
+        for key in current:
+            # Skip keys not in baseline if any (should match exactly though)
+            if key in baseline:
+                if is_diff(current[key], baseline[key]):
+                    is_dirty = True
+                    break
+        
+        # Check explicit LOGO upload which is always a change if present
+        if uploaded_logo is not None:
+            is_dirty = True
+
+        # D) BOTÓN & ACCIÓN (Persistence)
+        # AC: Inicia deshabilitado. Se habilita con cambios.
+        save_btn_label = "💾 Guardar Configuración" if is_dirty else "Sin cambios"
+        
+        # Use simple st.button instead of form_submit_button
+        if st.sidebar.button(save_btn_label, type="primary", disabled=not is_dirty, use_container_width=True):
             with st.spinner("Guardando cambios..."):
-                updates = {
-                    "business_name": business_name_input,
-                    "currency": currency_input,
-                    "phone_number": phone_number_input,
-                    "columns_catalog": columns_input,
-                    "pdf_custom_title": pdf_custom_title_input,
-                    "pdf_custom_subtitle": pdf_custom_subtitle_input,
-                    "pdf_columns": pdf_columns_input,
-                    # Branding
-                    "brand_primary": brand_primary,
-                    "brand_secondary": brand_secondary, 
-                    "brand_accent": brand_accent,
-                    "brand_text": brand_text
-                }
+                updates = current.copy()
                 
-                # Check Logo Update
+                # Procesa Logo si existe
                 if uploaded_logo:
                      try:
                         bytes_data = uploaded_logo.getvalue()
                         b64_logo = base64.b64encode(bytes_data).decode('utf-8')
                         updates["logo_base64"] = b64_logo
-                        # Also update session state for immediate use
                         st.session_state.logo = uploaded_logo 
                      except Exception as e:
                         st.warning(f"Error procesando logo: {e}")
 
                 if auth.update_user_settings(user_email, **updates):
-                     st.success("✅ ¡Configuración guardada exitosamente!")
-                     # Update session state caches
-                     st.session_state.business_name = business_name_input
-                     st.session_state.currency = currency_input
-                     st.session_state.pdf_custom_title = pdf_custom_title_input
-                     st.session_state.pdf_custom_subtitle = pdf_custom_subtitle_input
-                     st.session_state.pdf_use_pro = (pdf_layout_input == "Profesional (v2)")
+                     # SUCCESS: Update Baseline, Session & User Info
+                     st.session_state['cfg_baseline'] = current # Re-baseline
                      
-                     st.session_state.brand_primary = brand_primary
-                     st.session_state.brand_secondary = brand_secondary
-                     st.session_state.brand_accent = brand_accent
-                     st.session_state.brand_text = brand_text
+                     # Update session caches immediately
+                     st.session_state.business_name = updates['business_name']
+                     st.session_state.currency = updates['currency']
+                     st.session_state.columns = updates['columns_catalog']
+                     st.session_state.phone_number = updates['phone_number']
+                     st.session_state.pdf_custom_title = updates['pdf_custom_title']
+                     st.session_state.pdf_custom_subtitle = updates['pdf_custom_subtitle']
                      
+                     # Branding cache
+                     st.session_state.brand_primary = updates['brand_primary']
+                     st.session_state.brand_secondary = updates['brand_secondary']
+                     st.session_state.brand_accent = updates['brand_accent']
+                     st.session_state.brand_text = updates['brand_text']
+                     
+                     # Reload user_info source of truth
+                     st.session_state.user_info = auth.get_user_info(user_email)
+                     
+                     st.success("✅ Configuración guardada exitosamente")
+                     st.balloons()
                      time.sleep(1)
-                     st.rerun()
+                     st.rerun() # Force UI refresh to re-evaluate is_dirty with new baseline
                 else:
-                     st.error("Error al guardar en base de datos.")
+                     st.error("❌ No se pudo guardar la configuración. Intenta nuevamente.")
 
-        # Sync session state outside form to ensure other modules see it
-        st.session_state.business_name = user_info.get('business_name', 'Mi Empresa')
-        st.session_state.currency = user_info.get('currency', 'S/')
-        
         st.sidebar.markdown("---")
-        st.sidebar.caption(f"v{version.__version__}")
+        ver = version.__version__
+        st.sidebar.caption(f"v{ver}")
 
                 
     def render_main_content(self, is_admin):
