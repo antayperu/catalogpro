@@ -12,6 +12,7 @@ import time
 import re
 import numpy as np
 import math
+import version
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage, PageBreak, KeepTogether
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -27,17 +28,18 @@ from frd_schema import FRD_SCHEMA, get_required_columns, get_optional_columns, g
 from frd_validator import FRDValidator
 
 class NumberedCanvas(canvas.Canvas):
-    """Canvas avanzado que soporta 'Página X de Y'"""
+    """Clase para numerar páginas en ReportLab"""
     def __init__(self, *args, **kwargs):
         canvas.Canvas.__init__(self, *args, **kwargs)
         self._saved_page_states = []
 
     def showPage(self):
-        self._saved_page_states.append(dict(self.__dict__))
+        """Guardar el estado de la página para procesarla al final (CP-BUG-023 Fix)"""
+        self._saved_page_states.append(self.__dict__.copy())
         self._startPage()
 
     def save(self):
-        """Metodo mágico que rellena el total de páginas al final"""
+        """Renderizar todas las páginas guardadas con la numeración total corregida"""
         num_pages = len(self._saved_page_states)
         for state in self._saved_page_states:
             self.__dict__.update(state)
@@ -562,38 +564,60 @@ class EnhancedPDFExporter:
             }
         
         # Title Style
-        title_style = ParagraphStyle('CustomTitle', parent=self.styles['Heading1'], fontSize=24, spaceAfter=20, alignment=TA_CENTER, textColor=colors.HexColor(branding['primary']))
+        # CP-BUG-023: Protective wrapper for HexColor
+        def safe_hex_color(val, fallback="#000000"):
+            try: return colors.HexColor(val)
+            except: return colors.HexColor(fallback)
+
+        title_style = ParagraphStyle('CustomTitle', parent=self.styles['Heading1'], fontSize=24, spaceAfter=20, alignment=TA_CENTER, textColor=safe_hex_color(branding['primary'], "#2c3e50"))
         
         # Hierarchy Headers
-        h1_style = ParagraphStyle('H1_Linea', parent=self.styles['Heading2'], fontSize=18, spaceBefore=20, spaceAfter=10, textColor=colors.HexColor(branding['secondary']), borderPadding=5, borderWidth=0)
-        h2_style = ParagraphStyle('H2_Familia', parent=self.styles['Heading3'], fontSize=14, spaceBefore=10, spaceAfter=5, textColor=colors.HexColor(branding['accent']), leftIndent=10)
-        h3_style = ParagraphStyle('H3_Grupo', parent=self.styles['Heading4'], fontSize=12, spaceBefore=5, spaceAfter=5, textColor=colors.HexColor(branding['text']), leftIndent=20)
+        h1_style = ParagraphStyle('H1_Linea', parent=self.styles['Heading2'], fontSize=18, spaceBefore=20, spaceAfter=10, textColor=safe_hex_color(branding['secondary'], "#e74c3c"), borderPadding=5, borderWidth=0)
+        h2_style = ParagraphStyle('H2_Familia', parent=self.styles['Heading3'], fontSize=14, spaceBefore=10, spaceAfter=5, textColor=safe_hex_color(branding['accent'], "#3498db"), leftIndent=10)
+        h3_style = ParagraphStyle('H3_Grupo', parent=self.styles['Heading4'], fontSize=12, spaceBefore=5, spaceAfter=5, textColor=safe_hex_color(branding['text'], "#2c3e50"), leftIndent=20)
         
         # Product Text Styles
-        prod_name_style = ParagraphStyle('ProdName', parent=self.styles['Normal'], fontSize=10, leading=12, fontName='Helvetica-Bold', textColor=colors.HexColor(branding['text']))
+        prod_name_style = ParagraphStyle('ProdName', parent=self.styles['Normal'], fontSize=10, leading=12, fontName='Helvetica-Bold', textColor=safe_hex_color(branding['text'], "#2c3e50"))
         prod_desc_style = ParagraphStyle('ProdDesc', parent=self.styles['Normal'], fontSize=8, leading=10, textColor=colors.HexColor('#7f8c8d'))
-        prod_meta_style = ParagraphStyle('ProdMeta', parent=self.styles['Normal'], fontSize=9, leading=11, textColor=colors.HexColor(branding['primary']))
+        prod_meta_style = ParagraphStyle('ProdMeta', parent=self.styles['Normal'], fontSize=9, leading=11, textColor=safe_hex_color(branding['primary'], "#2c3e50"))
 
         # --- COVER PAGE ---
         # Logo (Only on Page 1)
+        logo_to_draw = None
+        user_info = st.session_state.get('user_info', {})
+        
         if hasattr(st.session_state, 'logo') and st.session_state.logo:
+            # First priority: freshly uploaded logo in session
             try:
-                # Use standard PIL Image -> Bytes -> RLImage flow to be safe
                 logo_pil = Image.open(st.session_state.logo)
-                # Resize if too big (max width 300)
-                if logo_pil.width > 300:
-                    ratio = 300 / logo_pil.width
-                    logo_pil = logo_pil.resize((300, int(logo_pil.height * ratio)), Image.Resampling.LANCZOS)
-                
                 logo_buf = io.BytesIO()
                 logo_pil.save(logo_buf, format='PNG')
                 logo_buf.seek(0)
-                
-                rl_logo = RLImage(logo_buf)
-                rl_logo.hAlign = 'CENTER'
-                story.append(rl_logo)
+                logo_to_draw = RLImage(logo_buf)
+            except:
+                pass
+        
+        # Second priority: saved logo in user_info
+        if not logo_to_draw:
+            logo_b64 = user_info.get('logo_base64')
+            if logo_b64:
+                try:
+                    img_data = base64.b64decode(logo_b64)
+                    logo_to_draw = RLImage(io.BytesIO(img_data))
+                except:
+                    pass
+        
+        if logo_to_draw:
+            try:
+                # Scale logo
+                w, h = logo_to_draw.drawWidth, logo_to_draw.drawHeight
+                aspect = h / w
+                logo_to_draw.drawWidth = 150
+                logo_to_draw.drawHeight = 150 * aspect
+                logo_to_draw.hAlign = 'CENTER'
+                story.append(logo_to_draw)
                 story.append(Spacer(1, 20))
-            except Exception as e:
+            except:
                 pass
 
 
@@ -803,7 +827,12 @@ class EnhancedPDFExporter:
         # But wait, original code had templates inline. I should preserve them or refactor.
         # To avoid massive duplicate code, I will refactor the build process into _build_pdf_doc
         
-        return self._build_pdf_doc(doc, df, currency, business_name)
+        # Build the document
+        story = self._build_pdf_doc(doc, df, currency, business_name)
+        doc.build(story, canvasmaker=NumberedCanvas, onFirstPage=self._add_footer_first, onLaterPages=self._add_footer_later)
+        
+        buffer.seek(0)
+        return buffer.getvalue()
 
     def generate_pdf_optimized(self, df, business_name, currency, phone_number, user_email, progress_callback=None, use_pro_layout=True):
         """OPTIMIZED v1.2.1: Generar PDF con descarga paralela e instrumentación"""
@@ -959,17 +988,32 @@ class EnhancedPDFExporter:
         """Crear header mejorado del PDF"""
         story = []
         
-        if hasattr(st.session_state, 'logo') and st.session_state.logo is not None:
+        # Logo handling (Robust)
+        logo_to_draw = None
+        user_info = st.session_state.get('user_info', {})
+        
+        if hasattr(st.session_state, 'logo') and st.session_state.logo:
             try:
-                logo_image = Image.open(st.session_state.logo)
-                logo_buffer = io.BytesIO()
-                logo_image.save(logo_buffer, format='PNG')
-                logo_buffer.seek(0)
-                pdf_logo = RLImage(logo_buffer, width=2.5*inch, height=1.2*inch)
-                story.append(pdf_logo)
-                story.append(Spacer(1, 15))
+                logo_pil = Image.open(st.session_state.logo)
+                logo_buf = io.BytesIO()
+                logo_pil.save(logo_buf, format='PNG')
+                logo_buf.seek(0)
+                logo_to_draw = RLImage(logo_buf, width=2.5*inch, height=1.2*inch)
             except:
                 pass
+                
+        if not logo_to_draw:
+            logo_b64 = user_info.get('logo_base64')
+            if logo_b64:
+                try:
+                    img_data = base64.b64decode(logo_b64)
+                    logo_to_draw = RLImage(io.BytesIO(img_data), width=2.5*inch, height=1.2*inch)
+                except:
+                    pass
+                    
+        if logo_to_draw:
+            story.append(logo_to_draw)
+            story.append(Spacer(1, 15))
         
         title_style = ParagraphStyle(
             name='EnhancedTitle',
@@ -1041,7 +1085,11 @@ class EnhancedPDFExporter:
     def _create_enhanced_product_cards(self, df, currency):
         """Crear tarjetas de productos organizadas por jerarquía (Línea -> Familia)"""
         story = []
-        columns = st.session_state.get('pdf_columns', 2)
+        # CP-BUG-023: Ensure 'columns' is an integer >= 1
+        raw_cols = st.session_state.get('pdf_columns', 2)
+        columns = int(raw_cols) if raw_cols and str(raw_cols).isdigit() else 2
+        if columns < 1: columns = 2
+        
         col_width = (A4[0] - 100) / columns
 
         # Estilos para encabezados de jerarquía
@@ -1444,9 +1492,12 @@ class EnhancedCatalogApp:
                 except:
                     pass # Fecha inválida no bloquea (fallback seguro?) O bloquea? Asumimos no bloquea por ahora.
             
-            # Si está vencido o sin saldo (y no es tiempo ilimitado), bloquear
-            # FRD: "Cuota agotada o licencia vencida => bloqueo total"
-            if is_expired:
+            # CP-BUG-022: Priority Date logic (UI adjustment)
+            if expiry_date_str and not is_expired:
+                # Si tiene fecha y NO ha vencido, en la UI lo tratamos como plan Tiempo
+                plan_type = "Tiempo"
+                expiry_date = expiry_date_str
+            elif is_expired:
                 current_quota = 0 # Forzar a 0 para bloquear consumo
                 expiry_date = expiry_date_str + " (VENCIDO)"
             else:
@@ -1728,8 +1779,26 @@ class EnhancedCatalogApp:
         
         st.sidebar.markdown("---")
 
-        # CP-UX-020: Formulario con Botón Guardar (Sin autosave)
-        with st.sidebar.form("settings_form"):
+        # CP-UX-020: Panel de Configuración con detección de cambios (Sin st.form para reactividad)
+        # Initialize internal reference state on first run or user change
+        if 'config_ref' not in st.session_state or st.session_state.get('last_user_ref') != user_email:
+            st.session_state.config_ref = {
+                'biz': str(user_info.get('business_name', 'Mi Empresa')).strip(),
+                'cur': str(user_info.get('currency', 'S/')).strip(),
+                'phone': str(user_info.get('phone_number', '')).strip(),
+                'col': int(user_info.get('columns_catalog', 3)),
+                'pdf_t': str(user_info.get('pdf_custom_title', '')).strip(),
+                'pdf_s': str(user_info.get('pdf_custom_subtitle', '')).strip(),
+                'pdf_c': int(user_info.get('pdf_columns', 2)),
+                'b_p': str(user_info.get('brand_primary', '#2c3e50')).lower().strip(),
+                'b_s': str(user_info.get('brand_secondary', '#e74c3c')).lower().strip(),
+                'b_a': str(user_info.get('brand_accent', '#3498db')).lower().strip(),
+                'b_t': str(user_info.get('brand_text', '#2c3e50')).lower().strip(),
+                'layout': str(user_info.get('pdf_layout', 'Profesional (v2)')).strip()
+            }
+            st.session_state.last_user_ref = user_email
+
+        with st.sidebar:
             with st.expander("🏢 Negocio", expanded=True):
                 business_name_input = st.text_input(
                     "Nombre", 
@@ -1801,15 +1870,43 @@ class EnhancedCatalogApp:
                 }
                 
                 c_b1, c_b2 = st.columns(2)
-                brand_primary = c_b1.color_picker("Primario", st.session_state.get('brand_primary', DEFAULT_COLORS['primary']))
-                brand_secondary = c_b2.color_picker("Secundario", st.session_state.get('brand_secondary', DEFAULT_COLORS['secondary']))
+                brand_primary = c_b1.color_picker("Primario", user_info.get('brand_primary', DEFAULT_COLORS['primary']))
+                brand_secondary = c_b2.color_picker("Secundario", user_info.get('brand_secondary', DEFAULT_COLORS['secondary']))
                 
                 c_b3, c_b4 = st.columns(2)
-                brand_accent = c_b3.color_picker("Acento", st.session_state.get('brand_accent', DEFAULT_COLORS['accent']))
-                brand_text = c_b4.color_picker("Texto", st.session_state.get('brand_text', DEFAULT_COLORS['text']))
+                brand_accent = c_b3.color_picker("Acento", user_info.get('brand_accent', DEFAULT_COLORS['accent']))
+                brand_text = c_b4.color_picker("Texto", user_info.get('brand_text', DEFAULT_COLORS['text']))
 
-            # Botón Guardar (CP-UX-020)
-            submitted_settings = st.form_submit_button("💾 Guardar Configuración", use_container_width=True, type="primary")
+            # CP-UX-020: Detección de Cambios (Dirty State) - Comparison with Reference State
+            ref = st.session_state.config_ref
+            DEFAULT_COLORS = {'primary': '#2c3e50', 'secondary': '#e74c3c', 'accent': '#3498db', 'text': '#2c3e50'}
+
+            comp = {
+                "biz": str(business_name_input).strip() != ref['biz'],
+                "cur": str(currency_input).strip() != ref['cur'],
+                "phone": str(phone_number_input).strip() != ref['phone'],
+                "col": int(columns_input) != ref['col'],
+                "pdf_t": str(pdf_custom_title_input).strip() != ref['pdf_t'],
+                "pdf_s": str(pdf_custom_subtitle_input).strip() != ref['pdf_s'],
+                "pdf_c": int(pdf_columns_input) != ref['pdf_c'],
+                "b_p": str(brand_primary).lower().strip() != ref['b_p'],
+                "b_s": str(brand_secondary).lower().strip() != ref['b_s'],
+                "b_a": str(brand_accent).lower().strip() != ref['b_a'],
+                "b_t": str(brand_text).lower().strip() != ref['b_t'],
+                "layout": str(pdf_layout_input).strip() != ref['layout'],
+                "logo": uploaded_logo is not None
+            }
+            
+            has_changes = any(comp.values())
+            
+            # Botón Guardar (Se habilita solo si hay cambios)
+            submitted_settings = st.button(
+                "💾 Guardar Configuración", 
+                use_container_width=True, 
+                type="primary",
+                disabled=not has_changes,
+                key="save_config_btn"
+            )
 
         if submitted_settings:
             with st.spinner("Guardando cambios..."):
@@ -1825,7 +1922,8 @@ class EnhancedCatalogApp:
                     "brand_primary": brand_primary,
                     "brand_secondary": brand_secondary, 
                     "brand_accent": brand_accent,
-                    "brand_text": brand_text
+                    "brand_text": brand_text,
+                    "pdf_layout": pdf_layout_input
                 }
                 
                 # Check Logo Update
@@ -1841,7 +1939,8 @@ class EnhancedCatalogApp:
 
                 if auth.update_user_settings(user_email, **updates):
                      st.success("✅ ¡Configuración guardada exitosamente!")
-                     # Update session state caches
+                     # Update session state caches (SSOT)
+                     st.session_state.user_info.update(updates)
                      st.session_state.business_name = business_name_input
                      st.session_state.currency = currency_input
                      st.session_state.pdf_custom_title = pdf_custom_title_input
@@ -1854,18 +1953,40 @@ class EnhancedCatalogApp:
                      st.session_state.brand_text = brand_text
                      
                      time.sleep(1)
+                     # Reset reference state to force disable button
+                     if 'config_ref' in st.session_state:
+                         del st.session_state.config_ref
+                     # Force rerun to refresh the sidebar button state (disabled again)
                      st.rerun()
                 else:
                      st.error("Error al guardar en base de datos.")
 
         # Sync session state outside form to ensure other modules see it
-        st.session_state.business_name = user_info.get('business_name', 'Mi Empresa')
-        st.session_state.currency = user_info.get('currency', 'S/')
+        # CP-BUG-023: Comprehensive sync and safe defaults
+        st.session_state.business_name = user_info.get('business_name') or 'Mi Empresa'
+        st.session_state.currency = user_info.get('currency') or 'S/'
+        st.session_state.pdf_columns = user_info.get('pdf_columns') or 2
+        st.session_state.pdf_use_pro = (user_info.get('pdf_layout') == "Profesional (v2)")
+        st.session_state.pdf_custom_title = user_info.get('pdf_custom_title')
+        st.session_state.pdf_custom_subtitle = user_info.get('pdf_custom_subtitle')
+        
+        # CP-UX-020: Inject branding config for PDF engine
+        st.session_state.branding_config = {
+            'primary': user_info.get('brand_primary') or '#2c3e50',
+            'secondary': user_info.get('brand_secondary') or '#e74c3c',
+            'accent': user_info.get('brand_accent') or '#3498db',
+            'text': user_info.get('brand_text') or '#2c3e50'
+        }
         
         st.sidebar.markdown("---")
-        st.sidebar.caption(f"v{version.__version__}")
-
-                
+        # DIAGNOSTICS CP-UX-020
+        backend = "Desconocido"
+        if st.session_state.auth_manager:
+            backend = st.session_state.auth_manager.backend_name
+            
+        st.sidebar.caption(f"🚀 v{version.__version__} | 🏗️ Build: 20260208_0265")
+        st.sidebar.caption(f"📡 Backend: {backend}")
+        
     def render_main_content(self, is_admin):
         # Define Tabs
         # Base tabs
@@ -2768,9 +2889,7 @@ class EnhancedCatalogApp:
                 st.rerun() # Update UI
                 
             except Exception as e:
-                # CP-UX-001: Fallback automático con mensaje simple
-                status_container.warning("⚠️ Intentando modo compatibilidad automático...")
-                
+                # CP-BUG-023/CP-UX-001: Silently fallback to legacy if optimized fails
                 try:
                     # Fallback: intentar con motor legacy
                     with st.spinner("Generando PDF (Modo Compatibilidad)..."):
@@ -2784,18 +2903,15 @@ class EnhancedCatalogApp:
                     
                     st.session_state['pdf_generated'] = pdf_bytes
                     st.session_state['last_pdf_stats'] = None
-                    
-                    status_container.success("✅ PDF generado en modo compatibilidad. Descárgalo arriba.")
-                    st.info("ℹ️ Se usó el modo compatibilidad debido a un problema temporal.")
                     detailed_status.empty()
                     time.sleep(1)
                     st.rerun()
                     
                 except Exception as e2:
                     # CP-UX-001: Mensaje de error simple sin términos técnicos
-                    st.error("❌ No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte.")
+                    st.error("❌ Error crítico: No se pudo generar el PDF. Por favor, contacta soporte.")
                     if is_admin:
-                        # Solo mostrar detalles técnicos a Admin
+                        st.exception(e2)
                         with st.expander("🔧 Detalles Técnicos (Admin)", expanded=False):
                             st.error(f"Error Premium: {str(e)}")
                             st.error(f"Error Fallback: {str(e2)}")

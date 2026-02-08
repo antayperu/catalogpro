@@ -310,7 +310,15 @@ class SupabaseBackend(AuthBackend):
                     "created_at": row.get("created_at"),
                     "last_login": row.get("last_login"),
                     "logo_base64": row.get("logo_base64"),
-                    "logo_path": row.get("logo_path")
+                    "logo_path": row.get("logo_path"),
+                    # CP-UX-020: Fields for configuration and branding (with defaults to avoid Dirty State)
+                    "columns_catalog": int(row.get("columns_catalog", 3)) if row.get("columns_catalog") is not None else 3,
+                    "pdf_columns": int(row.get("pdf_columns", 2)) if row.get("pdf_columns") is not None else 2,
+                    "brand_primary": row.get("brand_primary", "#2c3e50"),
+                    "brand_secondary": row.get("brand_secondary", "#e74c3c"),
+                    "brand_accent": row.get("brand_accent", "#3498db"),
+                    "brand_text": row.get("brand_text", "#2c3e50"),
+                    "pdf_layout": row.get("pdf_layout", "Profesional (v2)")
                 }
 
                 users[email] = user_data
@@ -352,11 +360,20 @@ class SupabaseBackend(AuthBackend):
                     "created_at": user_data.get("created_at"),
                     "last_login": user_data.get("last_login"),
                     "logo_base64": user_data.get("logo_base64"),
-                    "logo_path": user_data.get("logo_path")
+                    "logo_path": user_data.get("logo_path"),
+                    # CP-UX-020: Fields (Temporarily filtered if Supabase schema is missing them)
+                    "columns_catalog": user_data.get("columns_catalog"),
+                    "pdf_columns": user_data.get("pdf_columns"),
+                    "brand_primary": user_data.get("brand_primary"),
+                    "brand_secondary": user_data.get("brand_secondary"),
+                    "brand_accent": user_data.get("brand_accent"),
+                    "brand_text": user_data.get("brand_text"),
+                    "pdf_layout": user_data.get("pdf_layout")
                 }
 
                 # UPSERT: Inserta si no existe, actualiza si existe
-                self.client.table(self.table).upsert(supabase_data).execute()
+                # CP-UX-020: Full persistence enabled after migration
+                response = self.client.table(self.table).upsert(supabase_data).execute()
 
             except Exception as e:
                 print(f"[ERROR] Fallo al guardar usuario {email}: {e}")
@@ -415,6 +432,13 @@ class AuthManager:
 
         self._load_users()
     
+    @property
+    def backend_name(self) -> str:
+        """Retorna el nombre del backend actual"""
+        if isinstance(self.backend, SupabaseBackend): return "Supabase (Postgres)"
+        if isinstance(self.backend, GoogleSheetsBackend): return "Google Sheets"
+        return "Local JSON"
+
     def _load_users(self):
         self.users = self.backend.load_users()
     
@@ -477,12 +501,21 @@ class AuthManager:
         return False
 
     def check_quota(self, email: str) -> bool:
-        """Verificar si el usuario puede generar (Saldo > 0 Y No Vencido)"""
-        # 1. Validar fecha
-        if self.is_plan_expired(email):
-            return False
-            
-        # 2. Validar saldo
+        """
+        Verificar si el usuario puede generar. 
+        CRITICAL CP-BUG-022: Priorizar fecha de vencimiento sobre saldo de créditos.
+        """
+        user_info = self.get_user_info(email)
+        expiry_str = user_info.get("expires_at")
+        
+        # 1. Si el usuario tiene una fecha de vencimiento configurada
+        if expiry_str:
+            if not self.is_plan_expired(email):
+                return True # Tiene fecha válida en el futuro -> Acceso Ilimitado (Plan Tiempo/Hybrid)
+            else:
+                return False # Fecha ya venció -> Acceso denegado (aunque tenga créditos)
+                
+        # 2. Si no tiene fecha, validar por saldo de créditos (Plan Cantidad/Free tradicional)
         return self.get_user_quota(email) > 0
 
     def decrement_quota(self, email: str) -> bool:
