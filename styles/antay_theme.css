@@ -86,8 +86,31 @@ body {
 [class*="stSidebar"] h1,
 [class*="stSidebar"] h2,
 [class*="stSidebar"] h3 {
-  color: var(--antay-accent-blue);
-  font-weight: var(--antay-font-weight-bold);
+  color: var(--antay-accent-blue) !important;
+  font-weight: var(--antay-font-weight-bold) !important;
+}
+
+/* Expander titles in sidebar - Override white text */
+[class*="stSidebar"] [class*="stExpander"] [class*="stMarkdownContainer"] {
+  color: var(--antay-accent-blue) !important;
+}
+
+[class*="stSidebar"] [class*="stExpanderHeader"] {
+  color: var(--antay-accent-blue) !important;
+}
+
+/* More aggressive: All text content in sidebar expanders should NOT be white */
+[class*="stSidebar"] [class*="stExpander"] * {
+  color: inherit !important;
+}
+
+/* Specific fix for expander button text */
+[class*="stSidebar"] button[aria-expanded] {
+  color: var(--antay-accent-blue) !important;
+}
+
+[class*="stSidebar"] button[aria-expanded] span {
+  color: var(--antay-accent-blue) !important;
 }
 
 /* ============================================================================

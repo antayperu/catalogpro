@@ -1761,6 +1761,9 @@ class EnhancedCatalogApp:
         else:
             st.sidebar.info(f"📋 **{plan_type}**")
 
+        # DEBUG: Log para verificar plan status
+        print(f"[DEBUG SIDEBAR] plan_type={plan_type}, remaining={remaining}, expiry_date={expiry_date}")
+
         # Mostrar saldo o vigencia (según tipo de plan)
         if "Cantidad" in plan_type and remaining is not None:
             if remaining > 0:
@@ -1768,9 +1771,10 @@ class EnhancedCatalogApp:
             else:
                 st.sidebar.error("❌ No hay catálogos disponibles")
 
-        if "Fecha" in plan_type and expiry_date:
+        # Mostrar fecha de vencimiento para planes con límite de tiempo
+        if expiry_date and expiry_date.strip():  # Verificar que no sea None o vacío
             # Extraer fecha sin el texto " (VENCIDO)"
-            date_only = expiry_date.replace(" (VENCIDO)", "")
+            date_only = expiry_date.replace(" (VENCIDO)", "").strip()
 
             # Determinar si está vencido
             is_vencido = "(VENCIDO)" in expiry_date
@@ -1779,6 +1783,9 @@ class EnhancedCatalogApp:
                 st.sidebar.error(f"⏰ **Vence:** {date_only}\n⚠️ **EXPIRADO**")
             else:
                 st.sidebar.success(f"⏰ **Vigente hasta:** {date_only}")
+        elif "Fecha" in plan_type:
+            # Si es un plan de fecha pero no hay expiry_date, mostrar aviso
+            st.sidebar.warning(f"⚠️ Información de vencimiento no disponible")
         
         # CTA WhatsApp
         whatsapp_number = "51921566036"
