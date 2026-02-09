@@ -1745,29 +1745,40 @@ class EnhancedCatalogApp:
 
         # CP-UX-003: Tarjeta Plan y uso
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### 💎 Plan y uso")
-        
+
         plan_status = self.get_user_plan_status(user_email)
         plan_type = plan_status['plan_type']
         remaining = plan_status['remaining']
         expiry_date = plan_status['expiry_date']
 
         # Mostrar tipo de plan (actualizado para nuevos tipos)
+        st.sidebar.markdown("### 💎 Tu Plan")
+
         if "Free" in plan_type:
-            st.sidebar.info(f"**Plan:** {plan_type}")
+            st.sidebar.info(f"📚 **{plan_type}**")
         elif "Premium" in plan_type:
-            st.sidebar.success(f"**Plan:** {plan_type}")
+            st.sidebar.success(f"⭐ **{plan_type}**")
         else:
-            st.sidebar.info(f"**Plan:** {plan_type}")
+            st.sidebar.info(f"📋 **{plan_type}**")
 
         # Mostrar saldo o vigencia (según tipo de plan)
         if "Cantidad" in plan_type and remaining is not None:
             if remaining > 0:
-                st.sidebar.caption(f"✅ Te quedan **{remaining}** catálogos")
+                st.sidebar.metric("Catálogos Disponibles", remaining, delta=None)
             else:
-                st.sidebar.warning("⚠️ No te quedan catálogos disponibles")
-        elif "Fecha" in plan_type and expiry_date:
-            st.sidebar.caption(f"📅 Vence: **{expiry_date}**")
+                st.sidebar.error("❌ No hay catálogos disponibles")
+
+        if "Fecha" in plan_type and expiry_date:
+            # Extraer fecha sin el texto " (VENCIDO)"
+            date_only = expiry_date.replace(" (VENCIDO)", "")
+
+            # Determinar si está vencido
+            is_vencido = "(VENCIDO)" in expiry_date
+
+            if is_vencido:
+                st.sidebar.error(f"⏰ **Vence:** {date_only}\n⚠️ **EXPIRADO**")
+            else:
+                st.sidebar.success(f"⏰ **Vigente hasta:** {date_only}")
         
         # CTA WhatsApp
         whatsapp_number = "51921566036"

@@ -68,9 +68,18 @@ body {
   color: var(--antay-white);
 }
 
-/* Sidebar text styling */
-[class*="stSidebar"] * {
+/* Sidebar text styling - Solo aplicar a elementos de texto directo */
+[class*="stSidebar"] {
   color: var(--antay-white) !important;
+}
+
+/* Permitir que elementos internos (cards, divs, etc.) conserven su color */
+[class*="stSidebar"] [class*="stMarkdown"],
+[class*="stSidebar"] [class*="stInfo"],
+[class*="stSidebar"] [class*="stSuccess"],
+[class*="stSidebar"] [class*="stWarning"],
+[class*="stSidebar"] [class*="stError"] {
+  color: inherit;
 }
 
 /* Sidebar section headers */
