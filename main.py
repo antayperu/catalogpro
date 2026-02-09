@@ -623,9 +623,9 @@ class EnhancedPDFExporter:
 
         # --- TITLE & SUBTITLE (CP-BUG-019) ---
         # Logic to retrieve custom title/subtitle from session state
-        user_config = st.session_state.get('user', {})
-        custom_title = user_config.get('pdf_custom_title') or business_name
-        custom_subtitle = user_config.get('pdf_custom_subtitle')
+        user_info_ref = st.session_state.get('user_info', {})
+        custom_title = user_info_ref.get('pdf_custom_title') or business_name
+        custom_subtitle = user_info_ref.get('pdf_custom_subtitle')
         
         # 1. Title
         story.append(Paragraph(custom_title, title_style))
