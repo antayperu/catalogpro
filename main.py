@@ -27,6 +27,70 @@ import time
 from frd_schema import FRD_SCHEMA, get_required_columns, get_optional_columns, get_all_columns
 from frd_validator import FRDValidator
 
+# ============================================
+# TAREA 2: CARGA DE TEMA CORPORATIVO ANTAY
+# ============================================
+
+def load_antay_theme():
+    """
+    Carga el tema corporativo de Antay Perú.
+    Aplica colores de marca y mejora experiencia visual.
+    
+    Paleta corporativa:
+    - Naranja: #fe933a (botones principales)
+    - Azul: #013366 (headers, sidebar)
+    - Azul claro: #01bfff (links, secundarios)
+    - Verde: #10b981 (éxito)
+    - Naranja dark: #ff6f00 (warnings)
+    """
+    try:
+        with open('styles/antay_theme.css') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Archivo de estilos no encontrado. Usando tema por defecto.")
+
+# ============================================
+# TAREA 3: HEADER CORPORATIVO ANTAY
+# ============================================
+
+def render_antay_header():
+    """
+    Renderiza el header principal con identidad corporativa Antay Perú.
+    Incluye gradiente corporativo y versión de la app.
+    """
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #013366 0%, #01bfff 100%);
+        padding: 24px 32px;
+        border-radius: 8px;
+        margin-bottom: 32px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    ">
+        <h1 style="
+            color: white; 
+            margin: 0; 
+            font-size: 28px; 
+            font-weight: 700;
+        ">
+            CatalogPro
+        </h1>
+        <p style="
+            color: rgba(255,255,255,0.8); 
+            margin: 4px 0 0 0; 
+            font-size: 14px;
+            font-weight: 400;
+        ">
+            by Antay Perú · v1.7.0
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Cargar tema corporativo al inicio
+load_antay_theme()
+
+# Renderizar header corporativo
+render_antay_header()
+
 class NumberedCanvas(canvas.Canvas):
     """Canvas avanzado que soporta 'Página X de Y'"""
     def __init__(self, *args, **kwargs):
@@ -515,9 +579,9 @@ class CatalogGenerator:
                     product_dict = product.to_dict()
                     if not any(p['Producto'] == product_dict['Producto'] for p in st.session_state.email_products):
                         st.session_state.email_products.append(product_dict)
-                        st.success(f"✅ ¡{product['Producto']} añadido a la selección de email!")
+                        st.success(f"{product['Producto']} añadido a la selección de email")
                     else:
-                        st.info(f"ℹ️ {product['Producto']} ya estaba en la selección.")
+                        st.info(f"{product['Producto']} ya estaba en la selección")
 
         st.markdown("---")
 class EnhancedPDFExporter:
@@ -1521,7 +1585,7 @@ class EnhancedCatalogApp:
 
             # Validar que el usuario no este bloqueado
             if auth.is_user_blocked(user_email):
-                st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
+                st.error("Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
                 st.warning("Tu sesión ha sido cerrada automáticamente.")
                 print(f"[SESSION TERMINATED] Usuario bloqueado detectado en sesión activa: {user_email}")
 
@@ -1954,12 +2018,12 @@ class EnhancedCatalogApp:
                      # Reload user_info source of truth
                      st.session_state.user_info = auth.get_user_info(user_email)
                      
-                     st.success("✅ Configuración guardada exitosamente")
+                     st.success("Configuración guardada exitosamente")
                      st.balloons()
                      time.sleep(1)
                      st.rerun() # Force UI refresh to re-evaluate is_dirty with new baseline
                 else:
-                     st.error("❌ No se pudo guardar la configuración. Intenta nuevamente.")
+                     st.error("No se pudo guardar la configuración. Intenta nuevamente")
 
         st.sidebar.markdown("---")
         ver = version.__version__
@@ -2026,13 +2090,13 @@ class EnhancedCatalogApp:
 
     def render_security_tab(self):
         """Tab de seguridad para cambio de contraseña"""
-        st.header("🔐 Seguridad")
+        st.header("Seguridad")
         st.markdown("Gestiona la seguridad de tu cuenta.")
         
         c1, c2 = st.columns([1, 2])
         
         with c1:
-            st.info("ℹ️ **Importante:** Al cambiar tu contraseña, se cerrará tu sesión automáticamente para verificar las nuevas credenciales.")
+            st.info("Al cambiar tu contraseña, se cerrará tu sesión automáticamente para verificar las nuevas credenciales")
             
         with c2:
             with st.form("change_password_form", clear_on_submit=True):
@@ -2048,24 +2112,24 @@ class EnhancedCatalogApp:
                     user_email = st.session_state.user_email
                     
                     if not current_pass or not new_pass:
-                        st.error("❌ Todos los campos son obligatorios")
+                        st.error("Todos los campos son obligatorios")
                     elif new_pass != confirm_pass:
-                        st.error("❌ Las nuevas contraseñas no coinciden")
+                        st.error("Las nuevas contraseñas no coinciden")
                     elif len(new_pass) < 6:
-                        st.error("❌ La contraseña debe tener al menos 6 caracteres")
+                        st.error("La contraseña debe tener al menos 6 caracteres")
                     else:
                         with st.spinner("Actualizando..."):
                             result = auth.change_password(user_email, current_pass, new_pass)
                             
                         if result["success"]:
-                            st.success("✅ Contraseña actualizada exitosamente")
+                            st.success("Contraseña actualizada exitosamente")
                             st.balloons()
                             time.sleep(2)
                             # Logout for security
                             st.session_state.authenticated = False
                             st.rerun()
                         else:
-                            st.error(f"❌ {result['message']}")
+                            st.error(f"{result['message']}")
                             if result.get("error_code") == "INVALID_CURRENT":
                                 st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
     
@@ -2078,7 +2142,7 @@ class EnhancedCatalogApp:
         icon, title, desc, btn = states[tipo]
         st.markdown(f'<div class="empty-state"><div style="font-size:4rem">{icon}</div><h2>{title}</h2><p style="color:#7f8c8d">{desc}</p></div>', unsafe_allow_html=True)
         if st.button(btn, use_container_width=True, type="primary", key=f"es_{tipo}_{context}_{id(self)}"):
-            st.info("💡 Usa tabs arriba")
+            st.info("Usa tabs arriba para navegar")
     
     def render_active_filters(self, search, price_range, unit, min_p, max_p):
         filters = []
@@ -2235,7 +2299,7 @@ class EnhancedCatalogApp:
                 "Selecciona tu archivo",
                 type=['xlsx'],
                 key="exc",
-                help="Arrastra y suelta o haz click para seleccionar"
+                help="Selecciona tu archivo"
             )
             
             # Process Excel file
@@ -2722,7 +2786,7 @@ class EnhancedCatalogApp:
         """)
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Primero carga datos en la pestaña '📊 Cargar'")
+            st.warning("Primero carga datos en la pestaña Cargar")
             return
             
         # Use Filtered Data (CP-FEAT-008)
@@ -2746,16 +2810,16 @@ class EnhancedCatalogApp:
         
         if is_admin:
             with st.expander("⚙️ Avanzado (Solo Soporte)", expanded=False):
-                st.warning("⚠️ **Uso exclusivo para soporte técnico**\n\nActivar solo si la exportación Premium presenta problemas.")
+                st.warning("Uso exclusivo para soporte técnico. Activar solo si la exportación Premium presenta problemas")
                 compatibility_mode = st.checkbox(
                     "Modo compatibilidad (Motor Legacy)",
                     value=False,
-                    help="Desactiva optimizaciones y usa motor clásico. Usar solo si hay errores con el motor Premium."
+                    help="Desactiva optimizaciones si hay problemas con el motor Premium"
                 )
                 
                 if compatibility_mode:
                     use_optimized = False
-                    st.info("ℹ️ Modo compatibilidad activado: Motor Legacy sin optimizaciones")
+                    st.info("Modo compatibilidad activado: Motor Legacy sin optimizaciones")
 
         # CP-LIC-002: Verificar cuota ANTES de mostrar botones
         auth = st.session_state.auth_manager
@@ -2767,10 +2831,10 @@ class EnhancedCatalogApp:
         # Mostrar advertencia si no hay cuota
         if not has_quota:
             if is_expired:
-                st.error("📅 **Tu plan ha vencido**")
+                st.error("Tu plan ha vencido")
                 st.info("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
             else:
-                st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                st.error("Has agotado tus catálogos disponibles")
                 st.info("📱 Contacta a ventas en el menú lateral para ampliar tu plan.")
 
         c_action, c_download = st.columns([1, 2])
@@ -2795,11 +2859,11 @@ class EnhancedCatalogApp:
                     type="secondary",
                     use_container_width=True,
                     disabled=False,  # CP-BUG-013: Permitir descargar PDF ya generado aunque no haya cuota
-                    help="Descarga nuevamente el último PDF generado (sin consumir crédito adicional)"
+                    help="Descarga último PDF sin costo adicional"
                 )
             else:
                 st.caption("👈 Genera el PDF primero para descargar.")
-                st.info("💡 **Nota:** La generación consume 1 crédito. Puedes re-descargar el mismo PDF sin costo adicional.")
+                st.info("La generación consume 1 crédito. Puedes re-descargar el mismo PDF sin costo adicional")
 
         # --- Generation Logic ---
         if generate_btn:
@@ -2810,10 +2874,10 @@ class EnhancedCatalogApp:
             if not auth.check_quota(user_email):
                 # CP-FIX-004: UX Diferenciada
                 if auth.is_plan_expired(user_email):
-                    st.error("📅 **Tu plan ha vencido**")
+                    st.error("Tu plan ha vencido")
                     st.error("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
                 else:
-                    st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                    st.error("Has agotado tus catálogos disponibles")
                     st.info("Contacta a ventas en el menú lateral para ampliar tu plan.")
                 return
 
@@ -2886,14 +2950,14 @@ class EnhancedCatalogApp:
                     st.session_state['last_pdf_stats'] = None
                     
                     status_container.success("✅ PDF generado en modo compatibilidad. Descárgalo arriba.")
-                    st.info("ℹ️ Se usó el modo compatibilidad debido a un problema temporal.")
+                    st.info("Se usó el modo compatibilidad debido a un problema temporal")
                     detailed_status.empty()
                     time.sleep(1)
                     st.rerun()
                     
                 except Exception as e2:
                     # CP-UX-001: Mensaje de error simple sin términos técnicos
-                    st.error("❌ No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte.")
+                    st.error("No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte")
                     if is_admin:
                         # Solo mostrar detalles técnicos a Admin
                         with st.expander("🔧 Detalles Técnicos (Admin)", expanded=False):
@@ -2922,7 +2986,7 @@ class EnhancedCatalogApp:
             k4.metric("Imágenes Exitosas", f"{istats.get('ok', 0)}", delta=f"-{istats.get('failed', 0)} fallos" if istats.get('failed', 0) > 0 else "100%", delta_color="normal" if istats.get('failed', 0) > 0 else "off")
             
             if istats.get('failed', 0) > 0:
-                st.warning(f"⚠️ Atención: {istats['failed']} imágenes no se pudieron descargar y usan placeholder.")
+                st.warning(f"Atención: {istats['failed']} imágenes no se pudieron descargar y usan placeholder")
 
             # Technical Details (Collapsed)
             with st.expander("⚙️ Detalles Técnicos (Avanzado)", expanded=False):
@@ -2948,7 +3012,7 @@ class EnhancedCatalogApp:
         with c2:
             st.subheader("Catálogo Web (HTML)")
             st.caption("Genera un archivo HTML ligero para compartir como página web.")
-            if st.button("🌐 Generar HTML", key="ghml"):
+            if st.button("Generar HTML", key="ghml", type="primary"):
                 try:
                     with st.spinner("Generando HTML..."):
                         html = self.html_exporter.generate_html_catalog(
@@ -3229,7 +3293,7 @@ class EnhancedCatalogApp:
                                 time.sleep(2)
                                 st.rerun()
                             else:
-                                st.warning("⚠️ Este email ya está registrado.")
+                                st.warning("Este email ya está registrado")
                         except Exception as e:
                             st.error(f"Error interno: {str(e)}")
                             print(f"[USER CREATE ERROR] {e}")
@@ -3243,7 +3307,7 @@ class EnhancedCatalogApp:
         # CP-FEAT-016: Admin Reset Password
         st.subheader("🔐 Gestión de Accesos")
         with st.expander("Restablecer Contraseña de Usuario", expanded=False):
-            st.info("⚠️ Esta acción cambiará la contraseña del usuario inmediatamente.")
+            st.info("Esta acción cambiará la contraseña del usuario inmediatamente")
             
             all_users = auth.get_all_users()
             # Sort for better UX
@@ -3282,7 +3346,7 @@ class EnhancedCatalogApp:
         users_list = auth.get_all_users()
         
         if not users_list:
-            st.info("ℹ️ No hay usuarios registrados")
+            st.info("No hay usuarios registrados")
         else:
             search = st.text_input("Buscar", key="adm_search")
             
@@ -3395,7 +3459,7 @@ class EnhancedCatalogApp:
                                     
                                     is_admin_check = st.checkbox("Es Administrador", value=info.get('is_admin', False), key=f"is_admin_{email}", disabled=(email == auth.admin_email))
                                     
-                                    if st.button("💾 Guardar Todo", key=f"save_{email}", type="primary", use_container_width=True):
+                                    if st.button("Guardar Cambios", key=f"save_{email}", type="primary", use_container_width=True):
                                         # 1. Update Profile (Name/Business)
                                         auth.users["users"][email]['name'] = e_name.strip()
                                         auth.users["users"][email]['business_name'] = e_biz.strip()
@@ -3429,7 +3493,7 @@ class EnhancedCatalogApp:
                                 # Boton dinamico segun estado
                                 if is_blocked:
                                     # Usuario bloqueado -> Mostrar boton de desbloqueo
-                                    if st.button("🔓", key=f"unblock_{email}", help="Desbloquear usuario"):
+                                    if st.button("Desbloquear", key=f"unblock_{email}", type="primary"):
                                         if auth.unblock_user(email):
                                             st.toast(f"✅ Usuario {email} desbloqueado")
                                             print(f"[ADMIN ACTION] {st.session_state.user_email} desbloqueo a {email}")
@@ -3439,7 +3503,7 @@ class EnhancedCatalogApp:
                                             st.error("Error al desbloquear usuario")
                                 else:
                                     # Usuario activo -> Mostrar boton de bloqueo
-                                    if st.button("🔒", key=f"block_{email}", help="Bloquear usuario"):
+                                    if st.button("Bloquear", key=f"block_{email}", type="secondary"):
                                         if auth.block_user(email):
                                             st.toast(f"🔒 Usuario {email} bloqueado")
                                             print(f"[ADMIN ACTION] {st.session_state.user_email} bloqueo a {email}")
