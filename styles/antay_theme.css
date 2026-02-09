@@ -1,0 +1,427 @@
+/* ============================================================================
+   ANTAY CORPORATE BRANDING - THEME CSS
+   Paleta Corporativa Antay Perú
+   ============================================================================ */
+
+:root {
+  /* PRIMARY COLORS - Paleta Corporativa */
+  --antay-primary-orange: #fe933a;      /* Naranja principal - Botones CTA */
+  --antay-primary-blue: #013366;        /* Azul corporativo - Headers/Sidebar */
+  --antay-accent-blue: #01bfff;         /* Azul claro - Links/Acentos */
+  --antay-success-green: #10b981;       /* Verde - Estados exitosos */
+  --antay-warning-orange: #ff6f00;      /* Naranja oscuro - Advertencias */
+
+  /* NEUTRAL COLORS */
+  --antay-dark-gray: #1f2937;           /* Texto principal */
+  --antay-light-gray: #f3f4f6;          /* Fondos claros */
+  --antay-border-gray: #e5e7eb;         /* Bordes */
+  --antay-white: #ffffff;
+
+  /* TYPOGRAPHY */
+  --antay-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --antay-font-size-base: 14px;
+  --antay-font-size-lg: 16px;
+  --antay-font-size-h1: 28px;
+  --antay-font-size-h2: 22px;
+  --antay-font-size-h3: 18px;
+  --antay-font-weight-regular: 400;
+  --antay-font-weight-medium: 500;
+  --antay-font-weight-bold: 600;
+
+  /* SPACING */
+  --antay-spacing-xs: 4px;
+  --antay-spacing-sm: 8px;
+  --antay-spacing-md: 12px;
+  --antay-spacing-lg: 16px;
+  --antay-spacing-xl: 24px;
+
+  /* BORDERS & RADIUS */
+  --antay-border-radius-sm: 4px;
+  --antay-border-radius-md: 8px;
+  --antay-border-radius-lg: 12px;
+  --antay-border-width: 1px;
+
+  /* SHADOWS */
+  --antay-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --antay-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --antay-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================================================
+   GLOBAL STYLES
+   ============================================================================ */
+
+body {
+  font-family: var(--antay-font-family);
+  font-size: var(--antay-font-size-base);
+  color: var(--antay-dark-gray);
+  background-color: var(--antay-light-gray);
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   STREAMLIT SIDEBAR CUSTOMIZATION
+   ============================================================================ */
+
+[class*="stSidebar"] {
+  background: linear-gradient(180deg, var(--antay-primary-blue) 0%, #0a1f3f 100%);
+  color: var(--antay-white);
+}
+
+/* Sidebar text styling */
+[class*="stSidebar"] * {
+  color: var(--antay-white) !important;
+}
+
+/* Sidebar section headers */
+[class*="stSidebar"] h1,
+[class*="stSidebar"] h2,
+[class*="stSidebar"] h3 {
+  color: var(--antay-accent-blue);
+  font-weight: var(--antay-font-weight-bold);
+}
+
+/* ============================================================================
+   HEADER & BRANDING
+   ============================================================================ */
+
+.antay-header {
+  background: linear-gradient(90deg, var(--antay-primary-blue) 0%, #0a1f3f 100%);
+  color: var(--antay-white);
+  padding: var(--antay-spacing-lg) var(--antay-spacing-xl);
+  margin: -1rem -1rem 1rem -1rem;
+  border-bottom: 3px solid var(--antay-primary-orange);
+  text-align: center;
+}
+
+.antay-header h1 {
+  margin: 0;
+  font-size: var(--antay-font-size-h1);
+  font-weight: var(--antay-font-weight-bold);
+  color: var(--antay-accent-blue);
+  letter-spacing: 0.5px;
+}
+
+.antay-header p {
+  margin: var(--antay-spacing-sm) 0 0 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: var(--antay-font-weight-regular);
+}
+
+/* ============================================================================
+   BUTTONS & CTAs
+   ============================================================================ */
+
+/* Primary Button - Naranja corporativo */
+.antay-btn-primary {
+  background-color: var(--antay-primary-orange);
+  color: var(--antay-white);
+  border: none;
+  padding: var(--antay-spacing-md) var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  font-weight: var(--antay-font-weight-medium);
+  font-size: var(--antay-font-size-base);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--antay-shadow-sm);
+}
+
+.antay-btn-primary:hover {
+  background-color: #fd7d20;
+  box-shadow: var(--antay-shadow-md);
+  transform: translateY(-2px);
+}
+
+.antay-btn-primary:active {
+  background-color: #e5750a;
+  transform: translateY(0);
+}
+
+.antay-btn-primary:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Secondary Button - Azul claro */
+.antay-btn-secondary {
+  background-color: var(--antay-accent-blue);
+  color: var(--antay-primary-blue);
+  border: 1px solid var(--antay-accent-blue);
+  padding: var(--antay-spacing-md) var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  font-weight: var(--antay-font-weight-medium);
+  font-size: var(--antay-font-size-base);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--antay-shadow-sm);
+}
+
+.antay-btn-secondary:hover {
+  background-color: #00a8d8;
+  box-shadow: var(--antay-shadow-md);
+  transform: translateY(-2px);
+}
+
+/* ============================================================================
+   ALERTS & FEEDBACK
+   ============================================================================ */
+
+.antay-alert-success {
+  background-color: rgba(16, 185, 129, 0.1);
+  border-left: 4px solid var(--antay-success-green);
+  color: #065f46;
+  padding: var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  margin: var(--antay-spacing-md) 0;
+}
+
+.antay-alert-warning {
+  background-color: rgba(255, 111, 0, 0.1);
+  border-left: 4px solid var(--antay-warning-orange);
+  color: #7c2d12;
+  padding: var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  margin: var(--antay-spacing-md) 0;
+}
+
+.antay-alert-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border-left: 4px solid #ef4444;
+  color: #7f1d1d;
+  padding: var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  margin: var(--antay-spacing-md) 0;
+}
+
+.antay-alert-info {
+  background-color: rgba(1, 191, 255, 0.1);
+  border-left: 4px solid var(--antay-accent-blue);
+  color: #0c4a6e;
+  padding: var(--antay-spacing-lg);
+  border-radius: var(--antay-border-radius-md);
+  margin: var(--antay-spacing-md) 0;
+}
+
+/* ============================================================================
+   CARDS & CONTAINERS
+   ============================================================================ */
+
+.antay-card {
+  background-color: var(--antay-white);
+  border: var(--antay-border-width) solid var(--antay-border-gray);
+  border-radius: var(--antay-border-radius-lg);
+  padding: var(--antay-spacing-xl);
+  box-shadow: var(--antay-shadow-sm);
+  margin-bottom: var(--antay-spacing-lg);
+  transition: all 0.2s ease;
+}
+
+.antay-card:hover {
+  box-shadow: var(--antay-shadow-md);
+  border-color: var(--antay-accent-blue);
+}
+
+.antay-card-header {
+  border-bottom: 2px solid var(--antay-primary-orange);
+  padding-bottom: var(--antay-spacing-md);
+  margin-bottom: var(--antay-spacing-lg);
+}
+
+.antay-card-header h3 {
+  margin: 0;
+  color: var(--antay-primary-blue);
+  font-size: var(--antay-font-size-h3);
+  font-weight: var(--antay-font-weight-bold);
+}
+
+/* ============================================================================
+   TYPOGRAPHY
+   ============================================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--antay-primary-blue);
+  font-weight: var(--antay-font-weight-bold);
+  margin-top: var(--antay-spacing-lg);
+  margin-bottom: var(--antay-spacing-md);
+}
+
+h1 {
+  font-size: var(--antay-font-size-h1);
+  border-bottom: 3px solid var(--antay-primary-orange);
+  padding-bottom: var(--antay-spacing-md);
+}
+
+h2 {
+  font-size: var(--antay-font-size-h2);
+  color: var(--antay-primary-blue);
+}
+
+h3 {
+  font-size: var(--antay-font-size-h3);
+  color: var(--antay-primary-blue);
+}
+
+p {
+  margin-bottom: var(--antay-spacing-md);
+  line-height: 1.6;
+}
+
+/* ============================================================================
+   LINKS
+   ============================================================================ */
+
+a {
+  color: var(--antay-accent-blue);
+  text-decoration: none;
+  font-weight: var(--antay-font-weight-medium);
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--antay-primary-orange);
+  text-decoration: underline;
+}
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+
+.antay-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--antay-spacing-lg) 0;
+}
+
+.antay-table thead {
+  background-color: var(--antay-primary-blue);
+  color: var(--antay-white);
+}
+
+.antay-table th {
+  padding: var(--antay-spacing-md) var(--antay-spacing-lg);
+  text-align: left;
+  font-weight: var(--antay-font-weight-bold);
+  border-bottom: 2px solid var(--antay-primary-orange);
+}
+
+.antay-table td {
+  padding: var(--antay-spacing-md) var(--antay-spacing-lg);
+  border-bottom: var(--antay-border-width) solid var(--antay-border-gray);
+}
+
+.antay-table tbody tr:hover {
+  background-color: var(--antay-light-gray);
+}
+
+/* ============================================================================
+   FORM ELEMENTS
+   ============================================================================ */
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+  border: var(--antay-border-width) solid var(--antay-border-gray);
+  border-radius: var(--antay-border-radius-md);
+  padding: var(--antay-spacing-md);
+  font-family: var(--antay-font-family);
+  font-size: var(--antay-font-size-base);
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--antay-accent-blue);
+  box-shadow: 0 0 0 3px rgba(1, 191, 255, 0.1);
+}
+
+label {
+  color: var(--antay-primary-blue);
+  font-weight: var(--antay-font-weight-medium);
+  display: block;
+  margin-bottom: var(--antay-spacing-sm);
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+.antay-text-primary {
+  color: var(--antay-primary-orange);
+  font-weight: var(--antay-font-weight-bold);
+}
+
+.antay-text-secondary {
+  color: var(--antay-accent-blue);
+}
+
+.antay-text-success {
+  color: var(--antay-success-green);
+}
+
+.antay-text-warning {
+  color: var(--antay-warning-orange);
+}
+
+.antay-text-muted {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.antay-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--antay-border-gray), transparent);
+  margin: var(--antay-spacing-lg) 0;
+}
+
+.antay-badge {
+  display: inline-block;
+  padding: var(--antay-spacing-xs) var(--antay-spacing-sm);
+  border-radius: var(--antay-border-radius-sm);
+  font-size: 12px;
+  font-weight: var(--antay-font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.antay-badge-primary {
+  background-color: var(--antay-primary-orange);
+  color: var(--antay-white);
+}
+
+.antay-badge-success {
+  background-color: var(--antay-success-green);
+  color: var(--antay-white);
+}
+
+.antay-badge-warning {
+  background-color: var(--antay-warning-orange);
+  color: var(--antay-white);
+}
+
+/* ============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .antay-header {
+    padding: var(--antay-spacing-md) var(--antay-spacing-lg);
+  }
+
+  .antay-header h1 {
+    font-size: 24px;
+  }
+
+  [class*="stSidebar"] {
+    width: 100%;
+  }
+}

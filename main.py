@@ -61,6 +61,34 @@ st.set_page_config(
 )
 
 # =============================================================================
+# ANTAY CORPORATE BRANDING - TEMA VISUAL CP-UX-023
+# =============================================================================
+
+def load_antay_theme():
+    """Carga la paleta corporativa Antay desde styles/antay_theme.css"""
+    try:
+        css_path = os.path.join(os.path.dirname(__file__), "styles", "antay_theme.css")
+        if os.path.exists(css_path):
+            with open(css_path, "r", encoding="utf-8") as f:
+                css_content = f.read()
+            st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    except Exception as e:
+        print(f"[WARNING] No se pudo cargar tema Antay: {e}")
+
+def render_antay_header():
+    """Renderiza el header corporativo Antay con gradiente y branding"""
+    header_html = """
+    <div class="antay-header">
+        <h1>CATALOGPRO</h1>
+        <p>Catálogos Digitales Profesionales | Powered by Antay Perú</p>
+    </div>
+    """
+    st.markdown(header_html, unsafe_allow_html=True)
+
+# Cargar tema corporativo Antay
+load_antay_theme()
+
+# =============================================================================
 # CLASES AUXILIARES MEJORADAS v1.2
 # =============================================================================
 
@@ -1657,12 +1685,12 @@ class EnhancedCatalogApp:
         
 
     def render_header(self):
-        # CP-UX-021: Header Corporativo Premium
+        # CP-UX-023: Header Corporativo Antay (Paleta Corporativa)
         ver = version.__version__
         st.markdown(f"""
         <style>
-        .premium-header {{
-            background: linear-gradient(135deg, #013366 0%, #001f3f 100%);
+        .antay-corporate-header {{
+            background: linear-gradient(135deg, #013366 0%, #0a1f3f 100%);
             padding: 1.5rem;
             border-radius: 12px;
             color: white;
@@ -1671,31 +1699,35 @@ class EnhancedCatalogApp:
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-left: 5px solid #fe933a;
         }}
         .header-content h1 {{
             color: white !important;
             margin: 0;
             font-size: 1.8rem;
             font-weight: 700;
+            letter-spacing: 0.5px;
         }}
         .header-content p {{
-            color: #bdc3c7;
+            color: #01bfff;
             margin: 0;
             font-size: 0.9rem;
+            font-weight: 500;
         }}
         .version-badge {{
-            background: rgba(255,255,255,0.1);
-            padding: 4px 12px;
+            background: #fe933a;
+            padding: 6px 14px;
             border-radius: 20px;
             font-size: 0.8rem;
-            border: 1px solid rgba(255,255,255,0.2);
+            font-weight: 600;
+            color: white;
         }}
         </style>
-        
-        <div class="premium-header">
+
+        <div class="antay-corporate-header">
             <div class="header-content">
                 <h1>CatalogPro Enhanced</h1>
-                <p>Suite de Gestión de Catálogos & Ventas</p>
+                <p>Catálogos Digitales Profesionales | Antay Perú</p>
             </div>
             <div>
                 <span class="version-badge">v{ver}</span>
@@ -1918,10 +1950,10 @@ class EnhancedCatalogApp:
                 
     def render_main_content(self, is_admin):
         # Define Tabs
-        # Base tabs
-        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email", "🔐 Seguridad"]
+        # Base tabs (CP-UX-023: Iconos reducidos a 1-2 por sección)
+        tabs_titles = ["Cargar", "Catálogo", "WhatsApp", "Descargar PDF", "Email", "Seguridad"]
         if is_admin:
-             tabs_titles.append("👨‍💼 Admin")
+             tabs_titles.append("Admin")
         
         # Create Tabs
         tabs = st.tabs(tabs_titles)
