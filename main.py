@@ -4,7 +4,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from urllib.parse import urlparse, quote
@@ -1751,22 +1751,22 @@ class EnhancedCatalogApp:
         plan_type = plan_status['plan_type']
         remaining = plan_status['remaining']
         expiry_date = plan_status['expiry_date']
-        
-        # Mostrar tipo de plan
-        if plan_type == "Free":
+
+        # Mostrar tipo de plan (actualizado para nuevos tipos)
+        if "Free" in plan_type:
             st.sidebar.info(f"**Plan:** {plan_type}")
-        elif plan_type == "Cantidad":
+        elif "Premium" in plan_type:
             st.sidebar.success(f"**Plan:** {plan_type}")
-        elif plan_type == "Tiempo":
-            st.sidebar.success(f"**Plan:** {plan_type}")
-        
-        # Mostrar saldo o vigencia
-        if plan_type in ["Free", "Cantidad"] and remaining is not None:
+        else:
+            st.sidebar.info(f"**Plan:** {plan_type}")
+
+        # Mostrar saldo o vigencia (según tipo de plan)
+        if "Cantidad" in plan_type and remaining is not None:
             if remaining > 0:
                 st.sidebar.caption(f"✅ Te quedan **{remaining}** catálogos")
             else:
                 st.sidebar.warning("⚠️ No te quedan catálogos disponibles")
-        elif plan_type == "Tiempo" and expiry_date:
+        elif "Fecha" in plan_type and expiry_date:
             st.sidebar.caption(f"📅 Vence: **{expiry_date}**")
         
         # CTA WhatsApp
@@ -3140,29 +3140,53 @@ class EnhancedCatalogApp:
                 confirm_password = st.text_input("Confirmar Contraseña", type="password")
             st.markdown("---")
             with st.expander("💎 Configuración del Plan", expanded=True):
-                st.caption("Define los límites y privilegios para este usuario.")
+                st.caption("Selecciona el plan para este nuevo usuario.")
+                plan_options = ["Free (Cantidad)", "Free (Fecha 30 días)", "Pagado (Cantidad)", "Pagado (Fecha)"]
                 c3, c4, c5 = st.columns(3)
                 with c3:
-                    new_plan = st.selectbox("Tipo de Plan", ["Free", "Cantidad", "Tiempo"], key="new_plan_sel")
+                    new_plan = st.selectbox("Tipo de Plan", plan_options, key="new_plan_sel", help="Free = sin costo. Pagado = plan comercial activado por admin")
                 with c4:
-                    new_quota = st.number_input("Créditos Iniciales", min_value=0, value=5, step=1, key="new_quota_in")
+                    # Mostrar input de créditos solo si NO es plan por fecha
+                    if "Fecha" not in new_plan:
+                        new_quota = st.number_input("Créditos Iniciales", min_value=0, value=5, step=1, key="new_quota_in", help="Cantidad máxima de catálogos a generar")
+                    else:
+                        new_quota = st.number_input("Créditos Iniciales (ignorado)", min_value=0, value=0, step=1, key="new_quota_in", disabled=True, help="Plan por fecha no tiene límite de cantidad")
                 with c5:
-                    new_expiry_date = st.date_input("Vencimiento (Opcional)", value=None, key="new_expiry_in", help="Dejar vacío para indefinido")
+                    # Mostrar input de vencimiento solo si NOT es "Free (Cantidad)"
+                    if new_plan == "Free (Cantidad)":
+                        new_expiry_date = st.date_input("Vencimiento (N/A para Free Cantidad)", value=None, key="new_expiry_in", disabled=True, help="No aplica")
+                    elif new_plan == "Free (Fecha 30 días)":
+                        # Auto-calcular 30 días desde hoy
+                        default_date = datetime.now().date() + timedelta(days=30)
+                        new_expiry_date = st.date_input("Vencimiento (30 días)", value=default_date, key="new_expiry_in", disabled=True, help="Automático: 30 días desde hoy")
+                    else:
+                        # Planes pagados: permitir que admin ingrese la fecha
+                        new_expiry_date = st.date_input("Vencimiento", value=None, key="new_expiry_in", help="Fecha de vencimiento del plan comercial")
 
             submitted = st.form_submit_button("Agregar Usuario", use_container_width=True, type="primary")
-            
+
             if submitted:
                 if new_email and new_name and new_business and new_password:
                     if new_password == confirm_password:
                         try:
+                            # Mapear plan elegido a plan_type y configuración
+                            plan_mapping = {
+                                "Free (Cantidad)": ("Free", new_quota),
+                                "Free (Fecha 30 días)": ("Free (Fecha)", 0),  # Sin límite de cantidad
+                                "Pagado (Cantidad)": ("Premium (Cantidad)", new_quota),
+                                "Pagado (Fecha)": ("Premium (Fecha)", 0)
+                            }
+
+                            plan_type, quota_to_use = plan_mapping.get(new_plan, ("Free", new_quota))
+
                             # Format expiry date to string if present
                             expiry_str = new_expiry_date.strftime("%Y-%m-%d") if new_expiry_date else None
-                            
+
                             # Quota Max defaults to initial quota
-                            if auth.add_user(new_email, new_name, new_business, new_password, 
-                                             plan_type=new_plan, 
-                                             quota=new_quota, 
-                                             quota_max=new_quota,
+                            if auth.add_user(new_email, new_name, new_business, new_password,
+                                             plan_type=plan_type,
+                                             quota=quota_to_use,
+                                             quota_max=quota_to_use,
                                              expires_at=expiry_str):
                                 st.success(f"✅ Usuario **{new_email}** creado exitosamente.")
                                 st.info(f"📋 **Resumen del Plan:** {new_plan} | {new_quota} créditos")
@@ -3292,20 +3316,43 @@ class EnhancedCatalogApp:
                                     curr_plan = info.get('plan_type', 'Free')
                                     curr_quota = info.get('quota', 5)
                                     curr_expiry = info.get('expires_at')
-                                    
+
                                     date_obj = None
                                     if curr_expiry:
                                         try:
                                             date_obj = datetime.strptime(curr_expiry, "%Y-%m-%d").date()
                                         except: pass
-                                    
+
                                     col_p1, col_p2 = st.columns(2)
                                     with col_p1:
-                                        e_plan = st.selectbox("Plan", ["Free", "Cantidad", "Tiempo"], index=["Free", "Cantidad", "Tiempo"].index(curr_plan) if curr_plan in ["Free", "Cantidad", "Tiempo"] else 0, key=f"e_plan_{email}")
+                                        # Mapear tipos de plan antiguos a nuevos si es necesario (para backward compatibility)
+                                        curr_plan_mapped = curr_plan
+                                        if curr_plan == "Free":
+                                            curr_plan_mapped = "Free (Cantidad)" if not curr_expiry else "Free (Fecha 30 días)"
+                                        elif curr_plan == "Cantidad":
+                                            curr_plan_mapped = "Pagado (Cantidad)"
+                                        elif curr_plan == "Tiempo":
+                                            curr_plan_mapped = "Pagado (Fecha)"
+
+                                        plan_edit_options = ["Free (Cantidad)", "Free (Fecha 30 días)", "Pagado (Cantidad)", "Pagado (Fecha)"]
+                                        e_plan = st.selectbox("Plan", plan_edit_options,
+                                                            index=plan_edit_options.index(curr_plan_mapped) if curr_plan_mapped in plan_edit_options else 0,
+                                                            key=f"e_plan_{email}",
+                                                            help="Cambiar el tipo de plan del usuario")
                                     with col_p2:
-                                        e_quota = st.number_input("Créditos", value=curr_quota, min_value=0, key=f"e_quota_{email}")
-                                    
-                                    e_expiry = st.date_input("Vencimiento", value=date_obj, key=f"e_expiry_{email}")
+                                        if "Fecha" in e_plan:
+                                            e_quota = st.number_input("Créditos (ignorado)", value=0, min_value=0, key=f"e_quota_{email}", disabled=True, help="Plan por fecha no tiene límite")
+                                        else:
+                                            e_quota = st.number_input("Créditos", value=curr_quota, min_value=0, key=f"e_quota_{email}")
+
+                                    if "Free (Cantidad)" in e_plan:
+                                        e_expiry_display = "Sin vencimiento (plan por cantidad)"
+                                        e_expiry = None
+                                    elif "Free (Fecha" in e_plan or e_plan == "Pagado (Fecha)":
+                                        e_expiry = st.date_input("Vencimiento", value=date_obj, key=f"e_expiry_{email}")
+                                    else:
+                                        e_expiry_display = "Sin vencimiento (plan por cantidad)"
+                                        e_expiry = None
                                     
                                     # --- 3. Permisos ---
                                     st.caption("🛡️ Seguridad")
@@ -3316,16 +3363,24 @@ class EnhancedCatalogApp:
                                         # 1. Update Profile (Name/Business)
                                         auth.users["users"][email]['name'] = e_name.strip()
                                         auth.users["users"][email]['business_name'] = e_biz.strip()
-                                        
+
                                         # 2. Update Role
                                         if email != auth.admin_email:
                                              auth.users["users"][email]['is_admin'] = is_admin_check
-                                        
+
                                         auth._save_users()
-                                        
-                                        # 3. Update License details
+
+                                        # 3. Update License details - Mapear nuevo formato a internal format
+                                        edit_plan_mapping = {
+                                            "Free (Cantidad)": ("Free", e_quota),
+                                            "Free (Fecha 30 días)": ("Free (Fecha)", 0),
+                                            "Pagado (Cantidad)": ("Premium (Cantidad)", e_quota),
+                                            "Pagado (Fecha)": ("Premium (Fecha)", 0)
+                                        }
+
+                                        plan_type_to_save, quota_to_save = edit_plan_mapping.get(e_plan, ("Free", e_quota))
                                         new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
-                                        if auth.update_user_plan_details(email, plan_type=e_plan, quota=e_quota, quota_max=e_quota, expires_at=new_expiry_str):
+                                        if auth.update_user_plan_details(email, plan_type=plan_type_to_save, quota=quota_to_save, quota_max=quota_to_save, expires_at=new_expiry_str):
                                             st.toast("✅ Perfil actualizado correctamente")
                                             time.sleep(1)
                                             st.rerun()
