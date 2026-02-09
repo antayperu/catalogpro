@@ -3198,7 +3198,22 @@ class EnhancedCatalogApp:
                             plan_type, quota_to_use = plan_mapping.get(new_plan, ("Free", new_quota))
 
                             # Format expiry date to string if present
-                            expiry_str = new_expiry_date.strftime("%Y-%m-%d") if new_expiry_date else None
+                            expiry_str = None
+                            if new_expiry_date:
+                                try:
+                                    expiry_str = new_expiry_date.strftime("%Y-%m-%d")
+                                    print(f"[USER CREATE] Plan: {new_plan}, Expiry: {expiry_str}")
+                                except Exception as e:
+                                    print(f"[USER CREATE] Error formatting date: {e}")
+                                    expiry_str = None
+                            else:
+                                print(f"[USER CREATE] Plan: {new_plan}, sin fecha (expires_at=None)")
+
+                            # CRITICAL: For date-based plans, ensure expiry_str is set
+                            if "Fecha" in new_plan and not expiry_str:
+                                st.error(f"❌ Error: Plan {new_plan} requiere una fecha de vencimiento. Por favor intenta nuevamente.")
+                                print(f"[USER CREATE ERROR] Plan con Fecha sin expiry_str: {new_plan}")
+                                return
 
                             # Quota Max defaults to initial quota
                             if auth.add_user(new_email, new_name, new_business, new_password,
@@ -3207,7 +3222,9 @@ class EnhancedCatalogApp:
                                              quota_max=quota_to_use,
                                              expires_at=expiry_str):
                                 st.success(f"✅ Usuario **{new_email}** creado exitosamente.")
-                                st.info(f"📋 **Resumen del Plan:** {new_plan} | {new_quota} créditos")
+                                st.info(f"📋 **Resumen del Plan:** {new_plan}")
+                                if expiry_str:
+                                    st.info(f"📅 **Vigente hasta:** {expiry_str}")
                                 st.balloons()
                                 time.sleep(2)
                                 st.rerun()
@@ -3215,6 +3232,7 @@ class EnhancedCatalogApp:
                                 st.warning("⚠️ Este email ya está registrado.")
                         except Exception as e:
                             st.error(f"Error interno: {str(e)}")
+                            print(f"[USER CREATE ERROR] {e}")
                     else:
                         st.error("❌ Las contraseñas no coinciden")
                 else:

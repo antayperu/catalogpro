@@ -68,49 +68,105 @@ body {
   color: var(--antay-white);
 }
 
-/* Sidebar text styling - Solo aplicar a elementos de texto directo */
-[class*="stSidebar"] {
+/* ============================================================================
+   SIDEBAR STYLING - DEFINITIVO FIX
+   ============================================================================ */
+
+/* ONLY apply white text to plain text and markdown without inputs */
+[class*="stSidebar"] > * p,
+[class*="stSidebar"] > * span:not([class*="Input"]):not([class*="Select"]):not([class*="Text"]),
+[class*="stSidebar"] > * label {
   color: var(--antay-white) !important;
 }
 
-/* Permitir que elementos internos (cards, divs, etc.) conserven su color */
-[class*="stSidebar"] [class*="stMarkdown"],
-[class*="stSidebar"] [class*="stInfo"],
-[class*="stSidebar"] [class*="stSuccess"],
-[class*="stSidebar"] [class*="stWarning"],
-[class*="stSidebar"] [class*="stError"] {
-  color: inherit;
+/* Sidebar labels - Keep them white for contrast */
+[class*="stSidebar"] label {
+  color: var(--antay-white) !important;
 }
 
-/* Sidebar section headers */
+/* CRITICAL FIX: All input elements and their text should be DARK/READABLE */
+[class*="stSidebar"] input,
+[class*="stSidebar"] input[type="text"],
+[class*="stSidebar"] input[type="password"],
+[class*="stSidebar"] input[type="email"],
+[class*="stSidebar"] input[type="number"],
+[class*="stSidebar"] input[type="date"],
+[class*="stSidebar"] input[type="time"],
+[class*="stSidebar"] textarea,
+[class*="stSidebar"] select {
+  color: #000 !important;
+  background-color: #f5f5f5 !important;
+  border: 1px solid #ccc !important;
+}
+
+/* Placeholder text in inputs should be gray */
+[class*="stSidebar"] input::placeholder,
+[class*="stSidebar"] textarea::placeholder {
+  color: #888 !important;
+  opacity: 0.7 !important;
+}
+
+/* Selectbox (dropdown) styling */
+[class*="stSidebar"] [data-baseweb="select"],
+[class*="stSidebar"] [role="combobox"] {
+  background-color: #f5f5f5 !important;
+  border: 1px solid #ccc !important;
+}
+
+[class*="stSidebar"] [data-baseweb="select"] * {
+  color: #000 !important;
+}
+
+/* Number input styling */
+[class*="stSidebar"] [data-baseweb="input"] {
+  background-color: #f5f5f5 !important;
+}
+
+[class*="stSidebar"] [data-baseweb="input"] input {
+  color: #000 !important;
+}
+
+/* Sidebar section headers - Keep visible even in expanders */
 [class*="stSidebar"] h1,
 [class*="stSidebar"] h2,
-[class*="stSidebar"] h3 {
+[class*="stSidebar"] h3,
+[class*="stSidebar"] h4,
+[class*="stSidebar"] h5,
+[class*="stSidebar"] h6 {
   color: var(--antay-accent-blue) !important;
-  font-weight: var(--antay-font-weight-bold) !important;
+  font-weight: 700 !important;
 }
 
-/* Expander titles in sidebar - Override white text */
-[class*="stSidebar"] [class*="stExpander"] [class*="stMarkdownContainer"] {
+/* Expander button text - MUST be visible */
+[class*="stSidebar"] [class*="stExpander"] summary,
+[class*="stSidebar"] [class*="stExpander"] button {
   color: var(--antay-accent-blue) !important;
+}
+
+[class*="stSidebar"] [class*="stExpander"] button span {
+  color: var(--antay-accent-blue) !important;
+}
+
+/* Expander content - Allow proper text visibility */
+[class*="stSidebar"] [class*="stExpander"] {
+  background-color: transparent;
 }
 
 [class*="stSidebar"] [class*="stExpanderHeader"] {
   color: var(--antay-accent-blue) !important;
 }
 
-/* More aggressive: All text content in sidebar expanders should NOT be white */
-[class*="stSidebar"] [class*="stExpander"] * {
+/* Info/Success/Warning/Error boxes keep their colors */
+[class*="stSidebar"] [class*="stInfo"],
+[class*="stSidebar"] [class*="stSuccess"],
+[class*="stSidebar"] [class*="stWarning"],
+[class*="stSidebar"] [class*="stError"] {
   color: inherit !important;
 }
 
-/* Specific fix for expander button text */
-[class*="stSidebar"] button[aria-expanded] {
-  color: var(--antay-accent-blue) !important;
-}
-
-[class*="stSidebar"] button[aria-expanded] span {
-  color: var(--antay-accent-blue) !important;
+/* Make sure metric labels are readable */
+[class*="stSidebar"] [class*="stMetric"] {
+  color: var(--antay-white) !important;
 }
 
 /* ============================================================================

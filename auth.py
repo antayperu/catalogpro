@@ -502,21 +502,36 @@ class AuthManager:
 
     def check_quota(self, email: str) -> bool:
         """
-        Verificar si el usuario puede generar. 
+        Verificar si el usuario puede generar.
         CRITICAL CP-BUG-022: Priorizar fecha de vencimiento sobre saldo de créditos.
+        CP-BUG-2025: Soporte para planes con fecha (Free Fecha, Premium Fecha)
         """
         user_info = self.get_user_info(email)
         expiry_str = user_info.get("expires_at")
-        
-        # 1. Si el usuario tiene una fecha de vencimiento configurada
-        if expiry_str:
-            if not self.is_plan_expired(email):
-                return True # Tiene fecha válida en el futuro -> Acceso Ilimitado (Plan Tiempo/Hybrid)
+        plan_type = user_info.get("plan_type", "Free")
+
+        # DEBUG INFO
+        print(f"[CHECK_QUOTA DEBUG] email={email}, plan_type={plan_type}, expires_at={expiry_str}")
+
+        # 1. Si el usuario tiene una fecha de vencimiento configurada (Planes: Fecha/Tiempo/Hybrid)
+        if expiry_str and expiry_str.strip():  # Verificar que no sea None o vacío
+            is_expired = self.is_plan_expired(email)
+            print(f"[CHECK_QUOTA DEBUG] Plan con fecha: is_expired={is_expired}")
+
+            if not is_expired:
+                # Tiene fecha válida en el futuro -> Acceso Ilimitado (Plan Tiempo/Fecha)
+                print(f"[CHECK_QUOTA DEBUG] ✓ Retornando TRUE (plan con fecha vigente)")
+                return True
             else:
-                return False # Fecha ya venció -> Acceso denegado (aunque tenga créditos)
-                
+                # Fecha ya venció -> Acceso denegado (aunque tenga créditos)
+                print(f"[CHECK_QUOTA DEBUG] ✗ Retornando FALSE (plan con fecha VENCIDO)")
+                return False
+
         # 2. Si no tiene fecha, validar por saldo de créditos (Plan Cantidad/Free tradicional)
-        return self.get_user_quota(email) > 0
+        quota = self.get_user_quota(email)
+        result = quota > 0
+        print(f"[CHECK_QUOTA DEBUG] Plan por cantidad: quota={quota}, resultado={result}")
+        return result
 
     def decrement_quota(self, email: str) -> bool:
         """Restar 1 crédito al usuario. Retorna True si fue exitoso y autorizado."""
