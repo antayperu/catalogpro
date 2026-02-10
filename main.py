@@ -1,10 +1,11 @@
 ﻿import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import requests
 from PIL import Image, ImageDraw, ImageFont
 import io
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 from urllib.parse import urlparse, quote
@@ -26,6 +27,37 @@ import time
 # CP-UX-010 v4: FRD Schema and Validator
 from frd_schema import FRD_SCHEMA, get_required_columns, get_optional_columns, get_all_columns
 from frd_validator import FRDValidator
+
+# ============================================
+# TAREA 2: CARGA DE TEMA CORPORATIVO ANTAY
+# ============================================
+
+def load_antay_theme():
+    """
+    Carga el tema corporativo de Antay Perú.
+    Aplica colores de marca y mejora experiencia visual.
+    
+    Paleta corporativa:
+    - Naranja: #fe933a (botones principales)
+    - Azul: #013366 (headers, sidebar)
+    - Azul claro: #01bfff (links, secundarios)
+    - Verde: #10b981 (éxito)
+    - Naranja dark: #ff6f00 (warnings)
+    """
+    try:
+        with open('styles/antay_theme.css', encoding='utf-8') as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Archivo de estilos no encontrado. Usando tema por defecto.")
+    except UnicodeDecodeError as e:
+        st.error(f"Error de codificación al leer antay_theme.css: {e}. Asegúrate que el archivo esté en UTF-8.")
+
+# ============================================
+# TAREA 3: HEADER CORPORATIVO ANTAY
+# ============================================
+
+# Cargar tema corporativo al inicio (solo UNA VEZ)
+load_antay_theme()
 
 class NumberedCanvas(canvas.Canvas):
     """Canvas avanzado que soporta 'Página X de Y'"""
@@ -61,7 +93,45 @@ st.set_page_config(
 )
 
 # =============================================================================
-# CLASES AUXILIARES MEJORADAS v1.2
+# ANTAY CORPORATE BRANDING - TEMA VISUAL CP-UX-023
+# =============================================================================
+
+def load_antay_theme():
+    """Carga la paleta corporativa Antay desde styles/antay_theme.css"""
+    try:
+        css_path = os.path.join(os.path.dirname(__file__), "styles", "antay_theme.css")
+        if os.path.exists(css_path):
+            with open(css_path, "r", encoding="utf-8") as f:
+                css_content = f.read()
+            st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    except Exception as e:
+        print(f"[WARNING] No se pudo cargar tema Antay: {e}")
+
+class NumberedCanvas(canvas.Canvas):
+    """Canvas avanzado que soporta 'Página X de Y'"""
+    def __init__(self, *args, **kwargs):
+        canvas.Canvas.__init__(self, *args, **kwargs)
+        self._saved_page_states = []
+
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        """Metodo mágico que rellena el total de páginas al final"""
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def draw_page_number(self, page_count):
+        self.setFont("Helvetica", 9)
+        self.setFillColor(colors.HexColor('#7f8c8d'))
+        page_text = f"Página {self._pageNumber} de {page_count}"
+        self.drawRightString(A4[0] - 50, 40, page_text)
+
 # =============================================================================
 
 class DataHandler:
@@ -487,9 +557,9 @@ class CatalogGenerator:
                     product_dict = product.to_dict()
                     if not any(p['Producto'] == product_dict['Producto'] for p in st.session_state.email_products):
                         st.session_state.email_products.append(product_dict)
-                        st.success(f"✅ ¡{product['Producto']} añadido a la selección de email!")
+                        st.success(f"{product['Producto']} añadido a la selección de email")
                     else:
-                        st.info(f"ℹ️ {product['Producto']} ya estaba en la selección.")
+                        st.info(f"{product['Producto']} ya estaba en la selección")
 
         st.markdown("---")
 class EnhancedPDFExporter:
@@ -1448,38 +1518,98 @@ class EnhancedCatalogApp:
         auth = st.session_state.auth_manager
         
         plan_type = "Free"
+        license_mode = "quantity"
         current_quota = 5
         expiry_date = None
+        max_catalogs = None
+        current_catalogs = None
         
         if auth and user_email:
-            user_info = auth.get_user_info(user_email)
-            plan_type = user_info.get("plan_type", "Free")
-            current_quota = user_info.get("quota", 0)
-            expiry_date_str = user_info.get("expires_at", None)
+            auth.refresh_user(user_email)
+            snapshot = auth.get_license_snapshot(user_email)
+            plan_type = snapshot.get("plan_type", "Free")
+            license_mode = snapshot.get("license_mode", "quantity")
+            current_quota = snapshot.get("remaining", 0)
+            expiry_date_str = snapshot.get("expiry_date", None)
+            max_catalogs = snapshot.get("max_catalogs")
+            current_catalogs = snapshot.get("current_catalogs")
             
             # Validar vencimiento
             is_expired = False
-            if expiry_date_str:
+            if license_mode == "date" and expiry_date_str:
                 try:
                     exp_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
                     if exp_date < datetime.now().date():
                         is_expired = True
                 except:
                     pass # Fecha inválida no bloquea (fallback seguro?) O bloquea? Asumimos no bloquea por ahora.
-            
-            # Si está vencido o sin saldo (y no es tiempo ilimitado), bloquear
-            # FRD: "Cuota agotada o licencia vencida => bloqueo total"
-            if is_expired:
-                current_quota = 0 # Forzar a 0 para bloquear consumo
-                expiry_date = expiry_date_str + " (VENCIDO)"
-            else:
-                expiry_date = expiry_date_str
+
+            # Si está vencido, bloquear visualmente
+            if license_mode == "date":
+                if is_expired:
+                    expiry_date = f"{expiry_date_str} (VENCIDO)"
+                else:
+                    expiry_date = expiry_date_str
 
         return {
             'plan_type': plan_type,
+            'license_mode': license_mode,
             'remaining': current_quota,  # Catálogos restantes
-            'expiry_date': expiry_date
+            'expiry_date': expiry_date,
+            'max_catalogs': max_catalogs,
+            'current_catalogs': current_catalogs
         }
+
+    def format_license_info(self, auth, email, info):
+        snapshot = auth.get_license_snapshot(email)
+        plan_type = info.get("plan_type") or snapshot.get("plan_type") or "Free"
+        license_mode = info.get("license_mode") or snapshot.get("license_mode")
+
+        plan_lower = str(plan_type).lower()
+        expiry = info.get("expires_at") or info.get("expiry_date") or snapshot.get("expiry_date")
+        quota_val = info.get("quota")
+        quota_max = info.get("quota_max") or info.get("max_catalogs") or snapshot.get("max_catalogs")
+
+        if not license_mode:
+            if "fecha" in plan_lower or "date" in plan_lower:
+                license_mode = "date"
+            elif "cantidad" in plan_lower or "quantity" in plan_lower:
+                license_mode = "quantity"
+            elif quota_max is not None and int(quota_max or 0) > 0:
+                license_mode = "quantity"
+            elif quota_val is not None and int(quota_val or 0) > 0:
+                license_mode = "quantity"
+            elif expiry:
+                license_mode = "date"
+            else:
+                license_mode = "quantity"
+
+        if license_mode == "quantity":
+            max_catalogs = snapshot.get("max_catalogs") or quota_max
+            current_catalogs = snapshot.get("current_catalogs") or info.get("current_catalogs")
+            remaining = snapshot.get("remaining")
+
+            if current_catalogs is None and max_catalogs is not None:
+                try:
+                    quota_remaining = quota_val if quota_val is not None else remaining
+                    if quota_remaining is not None:
+                        current_catalogs = max(0, int(max_catalogs) - int(quota_remaining))
+                except (TypeError, ValueError):
+                    current_catalogs = None
+
+            if current_catalogs is not None and max_catalogs is not None:
+                detail = f"Créditos: **{current_catalogs} / {max_catalogs}**"
+            elif remaining is not None:
+                detail = f"Créditos disponibles: **{remaining}**"
+            elif quota_val is not None:
+                detail = f"Créditos disponibles: **{quota_val}**"
+            else:
+                detail = "Créditos: **0**"
+        else:
+            expiry = expiry or "Indefinido"
+            detail = f"Vence: {expiry}"
+
+        return plan_type, detail
         
     def run(self):
         # PRIMERO: Verificar autenticación
@@ -1493,7 +1623,7 @@ class EnhancedCatalogApp:
 
             # Validar que el usuario no este bloqueado
             if auth.is_user_blocked(user_email):
-                st.error("🔒 Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
+                st.error("Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.")
                 st.warning("Tu sesión ha sido cerrada automáticamente.")
                 print(f"[SESSION TERMINATED] Usuario bloqueado detectado en sesión activa: {user_email}")
 
@@ -1509,7 +1639,7 @@ class EnhancedCatalogApp:
 
         # DESPUÉS: Continuar normal
         self.setup_styles()
-        self.render_header()
+        self.render_antay_header()
         self.render_sidebar(is_admin)
         self.render_main_content(is_admin)
         
@@ -1656,86 +1786,260 @@ class EnhancedCatalogApp:
         """, unsafe_allow_html=True)
         
 
-    def render_header(self):
-        # CP-UX-021: Header Corporativo Premium
+    def clear_browser_cache(self):
+        # Best-effort localStorage cleanup (no-op if blocked)
+        components.html(
+            "<script>try { localStorage.clear(); } catch (e) {}</script>",
+            height=0,
+            width=0,
+        )
+
+    def logout(self):
+        self.clear_browser_cache()
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+    def render_antay_header(self):
+        # CP-UX-023: Header Corporativo Antay (jerarquía reforzada)
         ver = version.__version__
         st.markdown(f"""
         <style>
-        .premium-header {{
-            background: linear-gradient(135deg, #013366 0%, #001f3f 100%);
-            padding: 1.5rem;
-            border-radius: 12px;
+        .antay-corporate-header {{
+            background: linear-gradient(135deg, #013366 0%, #01bfff 100%);
+            padding: 10px 18px;
+            border-radius: 8px;
             color: white;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-left: 4px solid #fe933a;
         }}
-        .header-content h1 {{
+        .antay-header-title {{
             color: white !important;
-            margin: 0;
-            font-size: 1.8rem;
-            font-weight: 700;
+            margin: 0 0 6px 0;
+            font-size: 42px !important;
+            font-weight: 900 !important;
+            line-height: 1.05;
+            letter-spacing: -0.2px;
         }}
-        .header-content p {{
-            color: #bdc3c7;
+        .antay-header-subtitle {{
+            color: rgba(255,255,255,0.95);
             margin: 0;
-            font-size: 0.9rem;
+            font-size: 16px !important;
+            font-weight: 500 !important;
+            line-height: 1.2;
         }}
         .version-badge {{
-            background: rgba(255,255,255,0.1);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            border: 1px solid rgba(255,255,255,0.2);
+            background: #fe933a;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            color: white;
         }}
         </style>
-        
-        <div class="premium-header">
+
+        <div class="antay-corporate-header">
             <div class="header-content">
-                <h1>CatalogPro Enhanced</h1>
-                <p>Suite de Gestión de Catálogos & Ventas</p>
+                <div class="antay-header-title">CatalogPro Enhanced</div>
+                <div class="antay-header-subtitle">Catálogos Digitales Profesionales | Antay Perú</div>
             </div>
             <div>
                 <span class="version-badge">v{ver}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    def render_header(self):
+        # Wrapper legacy (mantener compatibilidad interna)
+        self.render_antay_header()
     
 
-    def render_sidebar(self, is_admin):
-        st.sidebar.header("📊 Configuración")
+    def render_sidebar_user_info(self):
+        # Compact welcome message (Antay corporate style)
+        user_info = st.session_state.user_info or {}
+        user_display_name = user_info.get('name', '')
+        user_business = user_info.get('business_name', '')
+
+        st.sidebar.markdown(
+            f"""
+            <div style="
+                background: rgba(1, 51, 102, 0.6);
+                border: 1px solid rgba(1, 191, 255, 0.3);
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 12px;
+            ">
+                <p class="antay-welcome-label" style="
+                    color: rgba(255,255,255,0.6);
+                    margin: 0 0 4px 0;
+                    font-size: 9px !important;
+                    font-weight: 600 !important;
+                    text-transform: uppercase;
+                    letter-spacing: 0.6px;
+                ">BIENVENIDO</p>
+                <h3 class="antay-user-name" style="
+                    color: white;
+                    margin: 0 0 4px 0;
+                    font-size: 20px !important;
+                    font-weight: 800 !important;
+                ">👋 {user_display_name}</h3>
+                <p class="antay-business-name" style="
+                    color: rgba(1, 191, 255, 0.9);
+                    margin: 0;
+                    font-size: 12px !important;
+                    font-weight: 400 !important;
+                ">{user_business}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if st.sidebar.button(" Cerrar Sesión", use_container_width=True, type="secondary"):
+            self.logout()
+
+    def render_brand_configuration(self, baseline):
+        def value_for(key, fallback):
+            value = baseline.get(key)
+            return value if value else fallback
+
+        color_primary   = value_for('brand_primary',   '#fe933a')
+        color_secondary = value_for('brand_secondary', '#013366')
+        color_accent    = value_for('brand_accent',    '#01bfff')
+        color_text      = value_for('brand_text',      '#1f2937')
+
+        with st.sidebar.expander("🎨 Configuración de Marca", expanded=False):
+            st.markdown("""
+                <style>
+                input[type="color"] {
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    width: 100% !important;
+                    height: 80px !important;
+                    border: none !important;
+                    border-radius: 8px !important;
+                    cursor: pointer;
+                    padding: 0 !important;
+                    display: block;
+                }
+                input[type="color"]::-webkit-color-swatch-wrapper {
+                    padding: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 8px;
+                }
+                input[type="color"]::-webkit-color-swatch {
+                    border: none;
+                    border-radius: 8px;
+                    width: 100%;
+                    height: 100%;
+                }
+                input[type="color"]::-moz-color-swatch {
+                    border: none;
+                    border-radius: 8px;
+                    width: 100%;
+                    height: 100%;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+
+            tab1, tab2, tab3, tab4 = st.tabs(["Primario", "Secundario", "Acento", "Texto"])
+
+            with tab1:
+                st.markdown("**Color Primario**")
+                _p = st.session_state.get('cfg_brand_primary', color_primary)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_p};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_primary = st.color_picker("", value=color_primary, key="cfg_brand_primary", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_primary}")
+
+            with tab2:
+                st.markdown("**Color Secundario**")
+                _s = st.session_state.get('cfg_brand_secondary', color_secondary)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_s};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_secondary = st.color_picker("", value=color_secondary, key="cfg_brand_secondary", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_secondary}")
+
+            with tab3:
+                st.markdown("**Color de Acento**")
+                _a = st.session_state.get('cfg_brand_accent', color_accent)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_a};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_accent = st.color_picker("", value=color_accent, key="cfg_brand_accent", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_accent}")
+
+            with tab4:
+                st.markdown("**Color de Texto**")
+                _t = st.session_state.get('cfg_brand_text', color_text)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_t};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_text = st.color_picker("", value=color_text, key="cfg_brand_text", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_text}")
+
+        return cfg_brand_primary, cfg_brand_secondary, cfg_brand_accent, cfg_brand_text
+    def render_sidebar_navigation(self, is_admin):
+        st.sidebar.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
+        st.sidebar.markdown("<span style='font-size:1.0em;font-weight:600;color:#fe933a;'>📊 Configuración</span>", unsafe_allow_html=True)
         
         auth = st.session_state.auth_manager
         user_email = st.session_state.user_email
-        user_info = st.session_state.user_info
+        user_info = st.session_state.user_info or {}
 
         # CP-UX-003: Tarjeta Plan y uso
         st.sidebar.markdown("---")
-        st.sidebar.markdown("### 💎 Plan y uso")
-        
+
         plan_status = self.get_user_plan_status(user_email)
         plan_type = plan_status['plan_type']
+        license_mode = plan_status.get('license_mode', 'quantity')
         remaining = plan_status['remaining']
         expiry_date = plan_status['expiry_date']
-        
-        # Mostrar tipo de plan
-        if plan_type == "Free":
-            st.sidebar.info(f"**Plan:** {plan_type}")
-        elif plan_type == "Cantidad":
-            st.sidebar.success(f"**Plan:** {plan_type}")
-        elif plan_type == "Tiempo":
-            st.sidebar.success(f"**Plan:** {plan_type}")
-        
-        # Mostrar saldo o vigencia
-        if plan_type in ["Free", "Cantidad"] and remaining is not None:
-            if remaining > 0:
-                st.sidebar.caption(f"✅ Te quedan **{remaining}** catálogos")
+        max_catalogs = plan_status.get('max_catalogs')
+        current_catalogs = plan_status.get('current_catalogs')
+
+        # Mostrar tipo de plan (actualizado para nuevos tipos)
+        st.sidebar.markdown("### 💎 Tu Plan")
+
+        if "Free" in plan_type:
+            st.sidebar.info(f"📚 **{plan_type}**")
+        elif "Premium" in plan_type:
+            st.sidebar.success(f"⭐ **{plan_type}**")
+        else:
+            st.sidebar.info(f"📋 **{plan_type}**")
+
+        # DEBUG: Log para verificar plan status
+        print(f"[DEBUG SIDEBAR] plan_type={plan_type}, license_mode={license_mode}, remaining={remaining}, expiry_date={expiry_date}")
+
+        # Mostrar saldo o vigencia (según modo de licencia)
+        if license_mode == "quantity":
+            display_remaining = remaining
+            if max_catalogs is not None and current_catalogs is not None:
+                try:
+                    display_remaining = max(0, int(max_catalogs) - int(current_catalogs))
+                    st.sidebar.caption(f"Usados: {current_catalogs}/{max_catalogs}")
+                except (TypeError, ValueError):
+                    pass
+
+            if display_remaining is not None and display_remaining > 0:
+                st.sidebar.metric("Catálogos Disponibles", display_remaining, delta=None)
             else:
-                st.sidebar.warning("⚠️ No te quedan catálogos disponibles")
-        elif plan_type == "Tiempo" and expiry_date:
-            st.sidebar.caption(f"📅 Vence: **{expiry_date}**")
+                st.sidebar.error("❌ No hay catálogos disponibles")
+
+        if license_mode == "date":
+            # Mostrar fecha de vencimiento para planes con límite de tiempo
+            if expiry_date and str(expiry_date).strip():
+                # Extraer fecha sin el texto " (VENCIDO)"
+                date_only = expiry_date.replace(" (VENCIDO)", "").strip()
+
+                # Determinar si está vencido
+                is_vencido = "(VENCIDO)" in expiry_date
+
+                if is_vencido:
+                    st.sidebar.error(f"⏰ **Vence:** {date_only}\n⚠️ **EXPIRADO**")
+                else:
+                    st.sidebar.success(f"⏰ **Vigente hasta:** {date_only}")
+            else:
+                st.sidebar.warning(f"⚠️ Información de vencimiento no disponible")
         
         # CTA WhatsApp
         whatsapp_number = "51921566036"
@@ -1760,6 +2064,10 @@ class EnhancedCatalogApp:
         # Inicializar baseline solo si no existe o si cambió el usuario
         # Normalizamos valores: None -> "" para texto, int para números
         if 'cfg_baseline' not in st.session_state or st.session_state.get('cfg_user_key') != user_email:
+            default_brand_primary = user_info.get('brand_primary') or st.session_state.get('brand_primary') or '#fe933a'
+            default_brand_secondary = user_info.get('brand_secondary') or st.session_state.get('brand_secondary') or '#013366'
+            default_brand_accent = user_info.get('brand_accent') or st.session_state.get('brand_accent') or '#01bfff'
+            default_brand_text = user_info.get('brand_text') or st.session_state.get('brand_text') or '#1f2937'
             st.session_state['cfg_baseline'] = {
                 'business_name': str(user_info.get('business_name') or ''),
                 'currency': user_info.get('currency', 'S/') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/",
@@ -1769,10 +2077,10 @@ class EnhancedCatalogApp:
                 'pdf_custom_subtitle': str(user_info.get('pdf_custom_subtitle') or ''),
                 'pdf_columns': int(user_info.get('pdf_columns', 2)),
                 'pdf_use_pro': bool(user_info.get('pdf_use_pro', True) if 'pdf_use_pro' in user_info else True),
-                'brand_primary': st.session_state.get('brand_primary') or '#2c3e50',
-                'brand_secondary': st.session_state.get('brand_secondary') or '#e74c3c',
-                'brand_accent': st.session_state.get('brand_accent') or '#3498db',
-                'brand_text': st.session_state.get('brand_text') or '#2c3e50'
+                'brand_primary': default_brand_primary,
+                'brand_secondary': default_brand_secondary,
+                'brand_accent': default_brand_accent,
+                'brand_text': default_brand_text
             }
             st.session_state['cfg_user_key'] = user_email
             
@@ -1787,7 +2095,7 @@ class EnhancedCatalogApp:
 
         with st.sidebar.expander("🎨 Diseño", expanded=False):
             cfg_columns = st.slider("Columnas", 1, 4, baseline['columns_catalog'], key="cfg_columns")
-            
+
             # Logo Handling
             st.markdown("**Logotipo**")
             current_logo_b64 = user_info.get('logo_base64')
@@ -1798,13 +2106,30 @@ class EnhancedCatalogApp:
                     st.image(image_data, caption="Logo Actual", width=150)
                 except:
                     pass
-            
-            uploaded_logo = st.file_uploader("Actualizar Logo", type=['png','jpg','jpeg'], key="cfg_logo_upload")
-            
-            cfg_pdf_title = st.text_input("Título PDF", value=baseline['pdf_custom_title'], key="cfg_pdf_title")
-            cfg_pdf_subtitle = st.text_input("Subtítulo PDF", value=baseline['pdf_custom_subtitle'], key="cfg_pdf_subtitle")
+
+            st.markdown("#### Actualizar Logo")
+            uploaded_logo = st.file_uploader(
+                "Selecciona una imagen",
+                type=['png', 'jpg', 'jpeg'],
+                help="Formatos: PNG, JPG. Tamaño máximo: 5MB",
+                label_visibility="collapsed",
+                key="cfg_logo_upload"
+            )
+
+            cfg_pdf_title = st.text_input(
+                "Título PDF",
+                value=baseline['pdf_custom_title'],
+                key="cfg_pdf_title",
+                help="Título que aparecerá en el PDF generado"
+            )
+            cfg_pdf_subtitle = st.text_input(
+                "Subtítulo PDF",
+                value=baseline['pdf_custom_subtitle'],
+                key="cfg_pdf_subtitle",
+                help="Subtítulo opcional para el PDF"
+            )
             cfg_pdf_cols = st.slider("Columnas PDF", 1, 3, baseline['pdf_columns'], key="cfg_pdf_cols")
-            
+
             # Map Pro Layout boolean to index for Selectbox
             layout_idx = 0 if baseline['pdf_use_pro'] else 1
             cfg_pdf_layout_str = st.selectbox(
@@ -1814,19 +2139,11 @@ class EnhancedCatalogApp:
                 key="cfg_pdf_layout"
             )
 
-        with st.sidebar.expander("🎨 Configuración de Marca", expanded=False):
-            # Defaults
-            DEFAULT_COLORS = {'primary': '#2c3e50', 'secondary': '#e74c3c', 'accent': '#3498db', 'text': '#2c3e50'}
-            # Fallback logic for Baseline vs Session vs Defaults
-            # Here baseline should rule what shows up in the picker initially
-            
-            c_b1, c_b2 = st.columns(2)
-            cfg_brand_primary = c_b1.color_picker("Primario", value=baseline['brand_primary'], key="cfg_brand_primary")
-            cfg_brand_secondary = c_b2.color_picker("Secundario", value=baseline['brand_secondary'], key="cfg_brand_secondary")
-            
-            c_b3, c_b4 = st.columns(2)
-            cfg_brand_accent = c_b3.color_picker("Acento", value=baseline['brand_accent'], key="cfg_brand_accent")
-            cfg_brand_text = c_b4.color_picker("Texto", value=baseline['brand_text'], key="cfg_brand_text")
+        self.render_brand_configuration(baseline)
+        cfg_brand_primary = st.session_state.get('cfg_brand_primary', baseline.get('brand_primary', '#fe933a'))
+        cfg_brand_secondary = st.session_state.get('cfg_brand_secondary', baseline.get('brand_secondary', '#013366'))
+        cfg_brand_accent = st.session_state.get('cfg_brand_accent', baseline.get('brand_accent', '#01bfff'))
+        cfg_brand_text = st.session_state.get('cfg_brand_text', baseline.get('brand_text', '#1f2937'))
 
         # C) NORMALIZACIÓN & DETECCIÓN (Change Detection)
         
@@ -1904,120 +2221,92 @@ class EnhancedCatalogApp:
                      # Reload user_info source of truth
                      st.session_state.user_info = auth.get_user_info(user_email)
                      
-                     st.success("✅ Configuración guardada exitosamente")
+                     st.success("Configuración guardada exitosamente")
                      st.balloons()
                      time.sleep(1)
                      st.rerun() # Force UI refresh to re-evaluate is_dirty with new baseline
                 else:
-                     st.error("❌ No se pudo guardar la configuración. Intenta nuevamente.")
+                     st.error("No se pudo guardar la configuración. Intenta nuevamente")
 
         st.sidebar.markdown("---")
-        ver = version.__version__
-        st.sidebar.caption(f"v{ver}")
 
-                
+    def render_sidebar(self, is_admin):
+        # Ensure baseline session state for critical fields (avoid PDF failures)
+        user_info = st.session_state.user_info
+        if user_info:
+            st.session_state.setdefault('business_name', user_info.get('business_name', ''))
+            st.session_state.setdefault('currency', user_info.get('currency', 'S/'))
+            st.session_state.setdefault('phone_number', user_info.get('phone_number', ''))
+            st.session_state.setdefault('pdf_use_pro', user_info.get('pdf_use_pro', True))
+            st.session_state.setdefault('pdf_custom_title', user_info.get('pdf_custom_title', ''))
+            st.session_state.setdefault('pdf_custom_subtitle', user_info.get('pdf_custom_subtitle', ''))
+
+        self.render_sidebar_user_info()
+        self.render_sidebar_navigation(is_admin)
+
     def render_main_content(self, is_admin):
-        # Define Tabs
-        # Base tabs
-        tabs_titles = ["📊 Cargar", "🛒 Catálogo", "📲 WhatsApp", "📄 Descargar PDF", "📧 Email", "🔐 Seguridad"]
+        """Contenido principal con tabs post-login"""
+        tabs_titles = [
+            "📊 Cargar",
+            "👀 Preview",
+            "📄 Exportar",
+            "📤 Compartir",
+            "🔒 Seguridad",
+        ]
         if is_admin:
-             tabs_titles.append("👨‍💼 Admin")
-        
-        # Create Tabs
+            tabs_titles.append("🛠️ Admin")
+
         tabs = st.tabs(tabs_titles)
-        
-        # 0. Cargar
+
         with tabs[0]:
             self.render_data_loading()
-            
-        # 1. Catálogo (Preview)
+
         with tabs[1]:
-            if 'df' in st.session_state and st.session_state.df is not None:
-                # Set defaults for view settings
-                if 'items_per_page' not in st.session_state:
-                    st.session_state.items_per_page = 48
-                if 'show_preview_images' not in st.session_state:
-                    st.session_state.show_preview_images = True
+            self.render_catalog()
 
-                self.render_catalog()
-            else:
-                self.render_empty_state('no_data', 'catalog_tab_no_df')
-                
-        # 2. WhatsApp
         with tabs[2]:
-             if hasattr(self, 'render_whatsapp_tab'):
-                 self.render_whatsapp_tab()
-             else:
-                 st.info("Módulo WhatsApp en construcción")
-             
-        # 3. Exportar (PDF)
-        with tabs[3]:
-            # Export tab - Decoupled
             self.render_export_options()
-            
-        # 4. Email
-        with tabs[4]:
-             if hasattr(self, 'render_email_interface'):
-                self.render_email_interface()
-             else:
-                 st.info("Módulo Email en construcción")
+ 
+        with tabs[3]:
+            st.info("🚧 Próximamente - Esta funcionalidad estará disponible en la próxima versión")
 
-        # 5. Seguridad (Nuevo Feature CP-FEAT-016)
-        with tabs[5]:
+        with tabs[4]:
             self.render_security_tab()
 
-        # 6. Admin (Opcional)
-        if is_admin and len(tabs) > 6:
-            with tabs[6]:
-                if hasattr(self, 'render_admin_panel'):
-                    self.render_admin_panel()
-                else:
-                    st.warning("Panel de Admin no encontrado")
+        if is_admin:
+            with tabs[5]:
+                self.render_admin_panel()
 
     def render_security_tab(self):
         """Tab de seguridad para cambio de contraseña"""
-        st.header("🔐 Seguridad")
-        st.markdown("Gestiona la seguridad de tu cuenta.")
-        
-        c1, c2 = st.columns([1, 2])
-        
-        with c1:
-            st.info("ℹ️ **Importante:** Al cambiar tu contraseña, se cerrará tu sesión automáticamente para verificar las nuevas credenciales.")
-            
-        with c2:
-            with st.form("change_password_form", clear_on_submit=True):
-                st.subheader("Cambiar Contraseña")
-                current_pass = st.text_input("Contraseña Actual", type="password")
-                new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
-                confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
-                
-                submitted = st.form_submit_button("Actualizar Contraseña", type="primary", use_container_width=True)
-                
-                if submitted:
-                    auth = st.session_state.auth_manager
-                    user_email = st.session_state.user_email
-                    
-                    if not current_pass or not new_pass:
-                        st.error("❌ Todos los campos son obligatorios")
-                    elif new_pass != confirm_pass:
-                        st.error("❌ Las nuevas contraseñas no coinciden")
-                    elif len(new_pass) < 6:
-                        st.error("❌ La contraseña debe tener al menos 6 caracteres")
-                    else:
-                        with st.spinner("Actualizando..."):
-                            result = auth.change_password(user_email, current_pass, new_pass)
-                            
-                        if result["success"]:
-                            st.success("✅ Contraseña actualizada exitosamente")
-                            st.balloons()
-                            time.sleep(2)
-                            # Logout for security
-                            st.session_state.authenticated = False
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {result['message']}")
-                            if result.get("error_code") == "INVALID_CURRENT":
-                                st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
+        st.header("Seguridad")
+        st.subheader("Cambiar Contraseña")
+        current_pass = st.text_input("Contraseña Actual", type="password")
+        new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
+        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
+
+        if st.button("Actualizar Contraseña", type="primary", use_container_width=True):
+            auth = st.session_state.auth_manager
+            if not current_pass or not new_pass:
+                st.error("Todos los campos son obligatorios")
+            elif new_pass != confirm_pass:
+                st.error("Las nuevas contraseñas no coinciden")
+            elif len(new_pass) < 6:
+                st.error("La contraseña debe tener al menos 6 caracteres")
+            else:
+                with st.spinner("Actualizando..."):
+                    result = auth.change_password(user_email, current_pass, new_pass)
+
+                if result["success"]:
+                    st.success("Contraseña actualizada exitosamente")
+                    st.balloons()
+                    time.sleep(2)
+                    st.session_state.authenticated = False
+                    st.rerun()
+                else:
+                    st.error(f"{result['message']}")
+                    if result.get("error_code") == "INVALID_CURRENT":
+                        st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
     
     def render_empty_state(self, tipo, context=''):
         states = {
@@ -2028,7 +2317,7 @@ class EnhancedCatalogApp:
         icon, title, desc, btn = states[tipo]
         st.markdown(f'<div class="empty-state"><div style="font-size:4rem">{icon}</div><h2>{title}</h2><p style="color:#7f8c8d">{desc}</p></div>', unsafe_allow_html=True)
         if st.button(btn, use_container_width=True, type="primary", key=f"es_{tipo}_{context}_{id(self)}"):
-            st.info("💡 Usa tabs arriba")
+            st.info("Usa tabs arriba para navegar")
     
     def render_active_filters(self, search, price_range, unit, min_p, max_p):
         filters = []
@@ -2185,7 +2474,7 @@ class EnhancedCatalogApp:
                 "Selecciona tu archivo",
                 type=['xlsx'],
                 key="exc",
-                help="Arrastra y suelta o haz click para seleccionar"
+                help="Selecciona tu archivo"
             )
             
             # Process Excel file
@@ -2672,7 +2961,7 @@ class EnhancedCatalogApp:
         """)
         
         if 'df' not in st.session_state or st.session_state.df is None:
-            st.warning("⚠️ Primero carga datos en la pestaña '📊 Cargar'")
+            st.warning("Primero carga datos en la pestaña Cargar")
             return
             
         # Use Filtered Data (CP-FEAT-008)
@@ -2696,16 +2985,16 @@ class EnhancedCatalogApp:
         
         if is_admin:
             with st.expander("⚙️ Avanzado (Solo Soporte)", expanded=False):
-                st.warning("⚠️ **Uso exclusivo para soporte técnico**\n\nActivar solo si la exportación Premium presenta problemas.")
+                st.warning("Uso exclusivo para soporte técnico. Activar solo si la exportación Premium presenta problemas")
                 compatibility_mode = st.checkbox(
                     "Modo compatibilidad (Motor Legacy)",
                     value=False,
-                    help="Desactiva optimizaciones y usa motor clásico. Usar solo si hay errores con el motor Premium."
+                    help="Desactiva optimizaciones si hay problemas con el motor Premium"
                 )
                 
                 if compatibility_mode:
                     use_optimized = False
-                    st.info("ℹ️ Modo compatibilidad activado: Motor Legacy sin optimizaciones")
+                    st.info("Modo compatibilidad activado: Motor Legacy sin optimizaciones")
 
         # CP-LIC-002: Verificar cuota ANTES de mostrar botones
         auth = st.session_state.auth_manager
@@ -2717,10 +3006,10 @@ class EnhancedCatalogApp:
         # Mostrar advertencia si no hay cuota
         if not has_quota:
             if is_expired:
-                st.error("📅 **Tu plan ha vencido**")
+                st.error("Tu plan ha vencido")
                 st.info("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
             else:
-                st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                st.error("Has agotado tus catálogos disponibles")
                 st.info("📱 Contacta a ventas en el menú lateral para ampliar tu plan.")
 
         c_action, c_download = st.columns([1, 2])
@@ -2745,11 +3034,11 @@ class EnhancedCatalogApp:
                     type="secondary",
                     use_container_width=True,
                     disabled=False,  # CP-BUG-013: Permitir descargar PDF ya generado aunque no haya cuota
-                    help="Descarga nuevamente el último PDF generado (sin consumir crédito adicional)"
+                    help="Descarga último PDF sin costo adicional"
                 )
             else:
                 st.caption("👈 Genera el PDF primero para descargar.")
-                st.info("💡 **Nota:** La generación consume 1 crédito. Puedes re-descargar el mismo PDF sin costo adicional.")
+                st.info("La generación consume 1 crédito. Puedes re-descargar el mismo PDF sin costo adicional")
 
         # --- Generation Logic ---
         if generate_btn:
@@ -2760,10 +3049,10 @@ class EnhancedCatalogApp:
             if not auth.check_quota(user_email):
                 # CP-FIX-004: UX Diferenciada
                 if auth.is_plan_expired(user_email):
-                    st.error("📅 **Tu plan ha vencido**")
+                    st.error("Tu plan ha vencido")
                     st.error("La fecha de vigencia de tu licencia ha expirado. Por favor contacta a soporte para renovar.")
                 else:
-                    st.error("⚠️ **Has agotado tus catálogos disponibles**")
+                    st.error("Has agotado tus catálogos disponibles")
                     st.info("Contacta a ventas en el menú lateral para ampliar tu plan.")
                 return
 
@@ -2836,14 +3125,14 @@ class EnhancedCatalogApp:
                     st.session_state['last_pdf_stats'] = None
                     
                     status_container.success("✅ PDF generado en modo compatibilidad. Descárgalo arriba.")
-                    st.info("ℹ️ Se usó el modo compatibilidad debido a un problema temporal.")
+                    st.info("Se usó el modo compatibilidad debido a un problema temporal")
                     detailed_status.empty()
                     time.sleep(1)
                     st.rerun()
                     
                 except Exception as e2:
                     # CP-UX-001: Mensaje de error simple sin términos técnicos
-                    st.error("❌ No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte.")
+                    st.error("No se pudo generar el PDF. Por favor, intenta nuevamente o contacta soporte")
                     if is_admin:
                         # Solo mostrar detalles técnicos a Admin
                         with st.expander("🔧 Detalles Técnicos (Admin)", expanded=False):
@@ -2872,7 +3161,7 @@ class EnhancedCatalogApp:
             k4.metric("Imágenes Exitosas", f"{istats.get('ok', 0)}", delta=f"-{istats.get('failed', 0)} fallos" if istats.get('failed', 0) > 0 else "100%", delta_color="normal" if istats.get('failed', 0) > 0 else "off")
             
             if istats.get('failed', 0) > 0:
-                st.warning(f"⚠️ Atención: {istats['failed']} imágenes no se pudieron descargar y usan placeholder.")
+                st.warning(f"Atención: {istats['failed']} imágenes no se pudieron descargar y usan placeholder")
 
             # Technical Details (Collapsed)
             with st.expander("⚙️ Detalles Técnicos (Avanzado)", expanded=False):
@@ -2898,7 +3187,13 @@ class EnhancedCatalogApp:
         with c2:
             st.subheader("Catálogo Web (HTML)")
             st.caption("Genera un archivo HTML ligero para compartir como página web.")
-            if st.button("🌐 Generar HTML", key="ghml"):
+            if st.button(
+                "Generar HTML",
+                key="ghml",
+                type="primary",
+                disabled=True,
+                help="Disponible próximamente",
+            ):
                 try:
                     with st.spinner("Generando HTML..."):
                         html = self.html_exporter.generate_html_catalog(
@@ -3108,39 +3403,81 @@ class EnhancedCatalogApp:
                 confirm_password = st.text_input("Confirmar Contraseña", type="password")
             st.markdown("---")
             with st.expander("💎 Configuración del Plan", expanded=True):
-                st.caption("Define los límites y privilegios para este usuario.")
+                st.caption("Selecciona el plan para este nuevo usuario.")
+                plan_options = ["Free (Cantidad)", "Free (Fecha 30 días)", "Pagado (Cantidad)", "Pagado (Fecha)"]
                 c3, c4, c5 = st.columns(3)
                 with c3:
-                    new_plan = st.selectbox("Tipo de Plan", ["Free", "Cantidad", "Tiempo"], key="new_plan_sel")
+                    new_plan = st.selectbox("Tipo de Plan", plan_options, key="new_plan_sel", help="Free = sin costo. Pagado = plan comercial activado por admin")
                 with c4:
-                    new_quota = st.number_input("Créditos Iniciales", min_value=0, value=5, step=1, key="new_quota_in")
+                    # Mostrar input de créditos solo si NO es plan por fecha
+                    if "Fecha" not in new_plan:
+                        new_quota = st.number_input("Créditos Iniciales", min_value=0, value=5, step=1, key="new_quota_in", help="Cantidad máxima de catálogos a generar")
+                    else:
+                        new_quota = st.number_input("Créditos Iniciales (ignorado)", min_value=0, value=0, step=1, key="new_quota_in", disabled=True, help="Plan por fecha no tiene límite de cantidad")
                 with c5:
-                    new_expiry_date = st.date_input("Vencimiento (Opcional)", value=None, key="new_expiry_in", help="Dejar vacío para indefinido")
+                    # Mostrar input de vencimiento solo si NOT es "Free (Cantidad)"
+                    if new_plan == "Free (Cantidad)":
+                        new_expiry_date = st.date_input("Vencimiento (N/A para Free Cantidad)", value=None, key="new_expiry_in", disabled=True, help="No aplica")
+                    elif new_plan == "Free (Fecha 30 días)":
+                        # Auto-calcular 30 días desde hoy
+                        default_date = datetime.now().date() + timedelta(days=30)
+                        new_expiry_date = st.date_input("Vencimiento (30 días)", value=default_date, key="new_expiry_in", disabled=True, help="Automático: 30 días desde hoy")
+                    else:
+                        # Planes pagados: permitir que admin ingrese la fecha
+                        new_expiry_date = st.date_input("Vencimiento", value=None, key="new_expiry_in", help="Fecha de vencimiento del plan comercial")
 
             submitted = st.form_submit_button("Agregar Usuario", use_container_width=True, type="primary")
-            
+
             if submitted:
                 if new_email and new_name and new_business and new_password:
                     if new_password == confirm_password:
                         try:
+                            # Mapear plan elegido a plan_type y configuración
+                            plan_mapping = {
+                                "Free (Cantidad)": ("Free", new_quota),
+                                "Free (Fecha 30 días)": ("Free (Fecha)", 0),  # Sin límite de cantidad
+                                "Pagado (Cantidad)": ("Premium (Cantidad)", new_quota),
+                                "Pagado (Fecha)": ("Premium (Fecha)", 0)
+                            }
+
+                            plan_type, quota_to_use = plan_mapping.get(new_plan, ("Free", new_quota))
+
                             # Format expiry date to string if present
-                            expiry_str = new_expiry_date.strftime("%Y-%m-%d") if new_expiry_date else None
-                            
+                            expiry_str = None
+                            if new_expiry_date:
+                                try:
+                                    expiry_str = new_expiry_date.strftime("%Y-%m-%d")
+                                    print(f"[USER CREATE] Plan: {new_plan}, Expiry: {expiry_str}")
+                                except Exception as e:
+                                    print(f"[USER CREATE] Error formatting date: {e}")
+                                    expiry_str = None
+                            else:
+                                print(f"[USER CREATE] Plan: {new_plan}, sin fecha (expires_at=None)")
+
+                            # CRITICAL: For date-based plans, ensure expiry_str is set
+                            if "Fecha" in new_plan and not expiry_str:
+                                st.error(f"❌ Error: Plan {new_plan} requiere una fecha de vencimiento. Por favor intenta nuevamente.")
+                                print(f"[USER CREATE ERROR] Plan con Fecha sin expiry_str: {new_plan}")
+                                return
+
                             # Quota Max defaults to initial quota
-                            if auth.add_user(new_email, new_name, new_business, new_password, 
-                                             plan_type=new_plan, 
-                                             quota=new_quota, 
-                                             quota_max=new_quota,
+                            if auth.add_user(new_email, new_name, new_business, new_password,
+                                             plan_type=plan_type,
+                                             quota=quota_to_use,
+                                             quota_max=quota_to_use,
                                              expires_at=expiry_str):
                                 st.success(f"✅ Usuario **{new_email}** creado exitosamente.")
-                                st.info(f"📋 **Resumen del Plan:** {new_plan} | {new_quota} créditos")
+                                st.info(f"📋 **Resumen del Plan:** {new_plan}")
+                                if expiry_str:
+                                    st.info(f"📅 **Vigente hasta:** {expiry_str}")
                                 st.balloons()
                                 time.sleep(2)
                                 st.rerun()
                             else:
-                                st.warning("⚠️ Este email ya está registrado.")
+                                st.warning("Este email ya está registrado")
                         except Exception as e:
                             st.error(f"Error interno: {str(e)}")
+                            print(f"[USER CREATE ERROR] {e}")
                     else:
                         st.error("❌ Las contraseñas no coinciden")
                 else:
@@ -3151,7 +3488,7 @@ class EnhancedCatalogApp:
         # CP-FEAT-016: Admin Reset Password
         st.subheader("🔐 Gestión de Accesos")
         with st.expander("Restablecer Contraseña de Usuario", expanded=False):
-            st.info("⚠️ Esta acción cambiará la contraseña del usuario inmediatamente.")
+            st.info("Esta acción cambiará la contraseña del usuario inmediatamente")
             
             all_users = auth.get_all_users()
             # Sort for better UX
@@ -3187,10 +3524,11 @@ class EnhancedCatalogApp:
         
         st.subheader("Usuarios Autorizados")
         
+        auth.refresh_users()
         users_list = auth.get_all_users()
         
         if not users_list:
-            st.info("ℹ️ No hay usuarios registrados")
+            st.info("No hay usuarios registrados")
         else:
             search = st.text_input("Buscar", key="adm_search")
             
@@ -3231,13 +3569,11 @@ class EnhancedCatalogApp:
                             st.caption(" | ".join(status_indicators))
 
                     with c_plan:
-                        plan = info.get('plan_type', 'Free')
-                        quota = info.get('quota', 0)
-                        expiry = info.get('expires_at') or "Indefinido"
-                        
+                        plan, license_detail = self.format_license_info(auth, email, info)
+
                         # Badge-like display for Plan
                         st.markdown(f"**Plan:** `{plan}`")
-                        st.caption(f"Créditos: **{quota}** | Vence: {expiry}")
+                        st.caption(license_detail)
 
                     with c_actions:
                         if email != auth.admin_email:
@@ -3260,40 +3596,90 @@ class EnhancedCatalogApp:
                                     curr_plan = info.get('plan_type', 'Free')
                                     curr_quota = info.get('quota', 5)
                                     curr_expiry = info.get('expires_at')
-                                    
+
                                     date_obj = None
                                     if curr_expiry:
                                         try:
                                             date_obj = datetime.strptime(curr_expiry, "%Y-%m-%d").date()
                                         except: pass
-                                    
+
                                     col_p1, col_p2 = st.columns(2)
                                     with col_p1:
-                                        e_plan = st.selectbox("Plan", ["Free", "Cantidad", "Tiempo"], index=["Free", "Cantidad", "Tiempo"].index(curr_plan) if curr_plan in ["Free", "Cantidad", "Tiempo"] else 0, key=f"e_plan_{email}")
+                                        # Mapear tipos de plan antiguos a nuevos si es necesario (para backward compatibility)
+                                        curr_plan_mapped = curr_plan
+                                        if curr_plan == "Free":
+                                            curr_plan_mapped = "Free (Cantidad)" if not curr_expiry else "Free (Fecha 30 días)"
+                                        elif curr_plan == "Cantidad":
+                                            curr_plan_mapped = "Pagado (Cantidad)"
+                                        elif curr_plan == "Tiempo":
+                                            curr_plan_mapped = "Pagado (Fecha)"
+
+                                        plan_edit_options = ["Free (Cantidad)", "Free (Fecha 30 días)", "Pagado (Cantidad)", "Pagado (Fecha)"]
+                                        e_plan = st.selectbox("Plan", plan_edit_options,
+                                                            index=plan_edit_options.index(curr_plan_mapped) if curr_plan_mapped in plan_edit_options else 0,
+                                                            key=f"e_plan_{email}",
+                                                            help="Cambiar el tipo de plan del usuario")
                                     with col_p2:
-                                        e_quota = st.number_input("Créditos", value=curr_quota, min_value=0, key=f"e_quota_{email}")
-                                    
-                                    e_expiry = st.date_input("Vencimiento", value=date_obj, key=f"e_expiry_{email}")
+                                        if "Fecha" in e_plan:
+                                            e_quota = st.number_input("Créditos (ignorado)", value=0, min_value=0, key=f"e_quota_{email}", disabled=True, help="Plan por fecha no tiene límite")
+                                        else:
+                                            e_quota = st.number_input("Créditos", value=curr_quota, min_value=0, key=f"e_quota_{email}")
+
+                                    if "Free (Cantidad)" in e_plan:
+                                        e_expiry_display = "Sin vencimiento (plan por cantidad)"
+                                        e_expiry = None
+                                    elif "Free (Fecha" in e_plan or e_plan == "Pagado (Fecha)":
+                                        e_expiry = st.date_input("Vencimiento", value=date_obj, key=f"e_expiry_{email}")
+                                    else:
+                                        e_expiry_display = "Sin vencimiento (plan por cantidad)"
+                                        e_expiry = None
                                     
                                     # --- 3. Permisos ---
                                     st.caption("🛡️ Seguridad")
                                     
                                     is_admin_check = st.checkbox("Es Administrador", value=info.get('is_admin', False), key=f"is_admin_{email}", disabled=(email == auth.admin_email))
                                     
-                                    if st.button("💾 Guardar Todo", key=f"save_{email}", type="primary", use_container_width=True):
+                                    if st.button("Guardar Cambios", key=f"save_{email}", type="primary", use_container_width=True):
                                         # 1. Update Profile (Name/Business)
                                         auth.users["users"][email]['name'] = e_name.strip()
                                         auth.users["users"][email]['business_name'] = e_biz.strip()
-                                        
+
                                         # 2. Update Role
                                         if email != auth.admin_email:
                                              auth.users["users"][email]['is_admin'] = is_admin_check
-                                        
+
+                                        # 2.1 Update License Mode (date vs quantity)
+                                        license_mode = "date" if "Fecha" in e_plan else "quantity"
+                                        auth.users["users"][email]['license_mode'] = license_mode
+
                                         auth._save_users()
-                                        
-                                        # 3. Update License details
-                                        new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
-                                        if auth.update_user_plan_details(email, plan_type=e_plan, quota=e_quota, quota_max=e_quota, expires_at=new_expiry_str):
+
+                                        # 3. Update License details - Mapear nuevo formato a internal format
+                                        edit_plan_mapping = {
+                                            "Free (Cantidad)": ("Free", e_quota),
+                                            "Free (Fecha 30 días)": ("Free (Fecha)", 0),
+                                            "Pagado (Cantidad)": ("Premium (Cantidad)", e_quota),
+                                            "Pagado (Fecha)": ("Premium (Fecha)", 0)
+                                        }
+
+                                        plan_type_to_save, quota_to_save = edit_plan_mapping.get(e_plan, ("Free", e_quota))
+                                        clear_expiry = False
+                                        if license_mode == "date":
+                                            new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
+                                        else:
+                                            # Clear expiry for quantity plans
+                                            new_expiry_str = None
+                                            clear_expiry = True
+
+                                        if auth.update_user_plan_details(
+                                            email,
+                                            plan_type=plan_type_to_save,
+                                            quota=quota_to_save,
+                                            quota_max=quota_to_save,
+                                            expires_at=new_expiry_str,
+                                            license_mode=license_mode,
+                                            clear_expiry=clear_expiry
+                                        ):
                                             st.toast("✅ Perfil actualizado correctamente")
                                             time.sleep(1)
                                             st.rerun()
@@ -3306,7 +3692,7 @@ class EnhancedCatalogApp:
                                 # Boton dinamico segun estado
                                 if is_blocked:
                                     # Usuario bloqueado -> Mostrar boton de desbloqueo
-                                    if st.button("🔓", key=f"unblock_{email}", help="Desbloquear usuario"):
+                                    if st.button("Desbloquear", key=f"unblock_{email}", type="primary"):
                                         if auth.unblock_user(email):
                                             st.toast(f"✅ Usuario {email} desbloqueado")
                                             print(f"[ADMIN ACTION] {st.session_state.user_email} desbloqueo a {email}")
@@ -3316,7 +3702,7 @@ class EnhancedCatalogApp:
                                             st.error("Error al desbloquear usuario")
                                 else:
                                     # Usuario activo -> Mostrar boton de bloqueo
-                                    if st.button("🔒", key=f"block_{email}", help="Bloquear usuario"):
+                                    if st.button("Bloquear", key=f"block_{email}", type="secondary"):
                                         if auth.block_user(email):
                                             st.toast(f"🔒 Usuario {email} bloqueado")
                                             print(f"[ADMIN ACTION] {st.session_state.user_email} bloqueo a {email}")

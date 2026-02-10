@@ -14,3 +14,23 @@ venv/
 ~$*.xlsx
 ~$*.xls
 *.tmp
+
+# Claude Code temp files
+tmpclaude-*
+
+# Tokens y credenciales
+.notion_token
+
+# Virtual environments
+venv_fresh/
+
+# Archivos de un solo uso / scripts temporales
+get-pip.py
+implementation_guide_output.txt
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Notion sync artifacts
+docs/.notion_sync_log.json
+docs/notion_resources.json
