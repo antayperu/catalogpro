@@ -1,3 +1,272 @@
+/* === ESPACIADO COMPACTO PROFESIONAL === */
+
+/* Contenedores generales - más compactos */
+.element-container {
+  margin: 8px 0 !important;
+}
+
+/* Markdown y texto */
+.stMarkdown {
+  margin-bottom: 12px !important;
+}
+
+/* Cards y contenedores */
+.stContainer, .stExpander {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px !important;
+  margin: 8px 0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+/* Inputs de formularios - más compactos */
+.stTextInput, .stSelectbox, .stNumberInput {
+  margin-bottom: 12px !important;
+}
+
+/* Secciones del sidebar - compactas */
+[data-testid="stSidebar"] .element-container {
+  margin: 4px 0 !important;
+}
+
+/* Separación entre grupos lógicos en sidebar */
+[data-testid="stSidebar"] hr {
+  margin: 8px 0 !important;
+}
+
+/* Headers y títulos - menos espacio */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+  margin-top: 10px !important;
+  margin-bottom: 6px !important;
+}
+
+/* === BOTONES CORPORATIVOS ANTAY === */
+
+/* Botón "Cerrar Sesión" - Azul corporativo con hover naranja */
+[data-testid="stSidebar"] button {
+  background: linear-gradient(135deg, #013366 0%, #015a9c 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 10px 20px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-testid="stSidebar"] button:hover {
+  background: linear-gradient(135deg, #fe933a 0%, #ff6f00 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(254, 147, 58, 0.3) !important;
+}
+
+/* Botón "Comprar / Ampliar plan" - Verde corporativo */
+[data-testid="stSidebar"] button[kind="primary"] {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  padding: 12px 24px !important;
+}
+
+/* Sidebar sections spacing */
+[data-testid="stSidebar"] .stMarkdown {
+  margin-bottom: 8px !important;
+}
+
+[data-testid="stSidebar"] .stCaption {
+  margin-bottom: 6px !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"]:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Botón "Sin cambios" en configuración */
+[data-testid="stSidebar"] button[disabled] {
+  background: rgba(1, 51, 102, 0.3) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  cursor: not-allowed !important;
+}
+
+/* === EXPANDERS COMPACTOS === */
+
+/* Reducir espacio interno de expanders */
+[data-testid="stExpander"] {
+  margin: 6px 0 !important;
+}
+
+/* Header del expander - más delgado */
+[data-testid="stExpander"] summary {
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+
+/* Contenido interno del expander */
+.streamlit-expanderContent {
+  padding: 6px 10px !important;
+}
+
+/* Reducir espacio en elementos dentro de expanders */
+[data-testid="stExpander"] .element-container {
+  margin: 3px 0 !important;
+}
+
+/* Color pickers visibles y compactos */
+/* ========================================
+   COLOR PICKERS - MÁXIMA VISIBILIDAD
+   ======================================== */
+
+/* El .element-container que envuelve el stColorPicker
+   se eleva 134px para quedar justo encima del div preview */
+[data-testid="stSidebar"] [data-baseweb="tab-panel"] .element-container:has([data-testid="stColorPicker"]) {
+  margin-top: -134px !important;
+  height: 130px !important;
+  position: relative !important;
+  z-index: 5 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stColorPicker"] {
+  height: 130px !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+[data-testid="stSidebar"] input[type="color"],
+[data-testid="stSidebar"] .stColorPicker input[type="color"] {
+  width: 100% !important;
+  min-height: 130px !important;
+  height: 130px !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: block !important;
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+[data-testid="stSidebar"] input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 6px !important;
+}
+[data-testid="stSidebar"] input[type="color"]::-webkit-color-swatch {
+  border: none !important;
+  border-radius: 6px !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+[data-testid="stSidebar"] input[type="color"]::-moz-color-swatch {
+  border: none !important;
+  border-radius: 6px !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+[data-testid="stSidebar"] input[type="color"]:hover {
+  outline: none !important;
+}
+
+[data-testid="stSidebar"] input[type="color"]:focus {
+  outline: none !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stColorPicker"] {
+  margin: 6px 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stColorPicker"] label {
+  display: none !important;
+}
+
+/* Ocultar input de texto interno del color picker */
+[data-testid="stSidebar"] [data-testid="stColorPicker"] input[type="text"] {
+  position: absolute !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+}
+
+/* Tabs dentro de configuración de marca */
+[data-testid="stSidebar"] [data-testid="stExpander"] .stTabs {
+  background-color: transparent !important;
+  margin-bottom: 12px !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-baseweb="tab-list"] {
+  gap: 2px !important;
+  background-color: transparent !important;
+  border-bottom: none !important;
+  flex-wrap: wrap !important;
+  overflow-x: auto !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-baseweb="tab"] {
+  background-color: rgba(1, 51, 102, 0.6) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(1, 191, 255, 0.3) !important;
+  padding: 4px 8px !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  border-radius: 6px 6px 0 0 !important;
+  min-width: 0 !important;
+  flex: 1 1 auto !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-baseweb="tab"]:hover {
+  background-color: rgba(1, 51, 102, 0.8) !important;
+  border-color: rgba(1, 191, 255, 0.5) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-baseweb="tab"][aria-selected="true"] {
+  background-color: rgba(1, 191, 255, 0.25) !important;
+  border-color: #01bfff !important;
+  color: white !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 6px rgba(1, 191, 255, 0.3) !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stExpander"] [data-baseweb="tab-panel"] {
+  padding: 12px 8px !important;
+  background-color: rgba(1, 51, 102, 0.3) !important;
+  border-radius: 0 0 6px 6px !important;
+  min-height: 180px !important;
+}
+
+/* Asegurar swatch visible en navegadores */
+[data-testid="stSidebar"] input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 6px !important;
+}
+[data-testid="stSidebar"] input[type="color"]::-webkit-color-swatch {
+  border: none !important;
+  border-radius: 6px !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+[data-testid="stSidebar"] input[type="color"]::-moz-color-swatch {
+  border: none !important;
+  border-radius: 6px !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+/* Archivo convertido a UTF-8 por Antay Fábrica de Software */
+
 /* ============================================================================
    ANTAY CORPORATE BRANDING - THEME CSS
    Paleta Corporativa Antay Perú
@@ -59,114 +328,341 @@ body {
   line-height: 1.5;
 }
 
-/* ============================================================================
-   STREAMLIT SIDEBAR CUSTOMIZATION
-   ============================================================================ */
+/* ============================================
+   SIDEBAR - CORRECCIÓN TOTAL DE CONTRASTE
+   ============================================ */
 
-[class*="stSidebar"] {
-  background: linear-gradient(180deg, var(--antay-primary-blue) 0%, #0a1f3f 100%);
-  color: var(--antay-white);
+/* Fondo azul corporativo Antay en TODO el sidebar */
+[data-testid="stSidebar"] {
+  background-color: #013366 !important;
 }
 
-/* ============================================================================
-   SIDEBAR STYLING - DEFINITIVO FIX
-   ============================================================================ */
-
-/* ONLY apply white text to plain text and markdown without inputs */
-[class*="stSidebar"] > * p,
-[class*="stSidebar"] > * span:not([class*="Input"]):not([class*="Select"]):not([class*="Text"]),
-[class*="stSidebar"] > * label {
-  color: var(--antay-white) !important;
+/* TODOS los textos en blanco por defecto */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] * {
+  color: rgba(255, 255, 255, 0.95) !important;
 }
 
-/* Sidebar labels - Keep them white for contrast */
-[class*="stSidebar"] label {
-  color: var(--antay-white) !important;
+/* ========================================
+   INPUTS Y CAMPOS DE FORMULARIO
+   ======================================== */
+
+/* Text inputs - fondo semi-transparente oscuro */
+[data-testid="stSidebar"] input[type="text"],
+[data-testid="stSidebar"] input[type="email"],
+[data-testid="stSidebar"] input[type="password"],
+[data-testid="stSidebar"] input[type="number"],
+[data-testid="stSidebar"] textarea {
+  background-color: rgba(1, 51, 102, 0.8) !important; /* Azul más oscuro */
+  color: white !important;
+  border: 1px solid rgba(1, 191, 255, 0.3) !important;
+  border-radius: 6px !important;
+  padding: 8px 12px !important;
 }
 
-/* CRITICAL FIX: All input elements and their text should be DARK/READABLE */
-[class*="stSidebar"] input,
-[class*="stSidebar"] input[type="text"],
-[class*="stSidebar"] input[type="password"],
-[class*="stSidebar"] input[type="email"],
-[class*="stSidebar"] input[type="number"],
-[class*="stSidebar"] input[type="date"],
-[class*="stSidebar"] input[type="time"],
-[class*="stSidebar"] textarea,
-[class*="stSidebar"] select {
-  color: #000 !important;
-  background-color: #f5f5f5 !important;
-  border: 1px solid #ccc !important;
+/* Placeholder text - gris claro visible */
+[data-testid="stSidebar"] input::placeholder,
+[data-testid="stSidebar"] textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5) !important;
 }
 
-/* Placeholder text in inputs should be gray */
-[class*="stSidebar"] input::placeholder,
-[class*="stSidebar"] textarea::placeholder {
-  color: #888 !important;
-  opacity: 0.7 !important;
+/* Focus state en inputs */
+[data-testid="stSidebar"] input:focus,
+[data-testid="stSidebar"] textarea:focus {
+  border-color: #01bfff !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(1, 191, 255, 0.2) !important;
 }
 
-/* Selectbox (dropdown) styling */
-[class*="stSidebar"] [data-baseweb="select"],
-[class*="stSidebar"] [role="combobox"] {
-  background-color: #f5f5f5 !important;
-  border: 1px solid #ccc !important;
+/* ========================================
+   FILE UPLOADER (Actualizar Logo)
+   ======================================== */
+
+/* Container del file uploader - SIN fondo blanco */
+[data-testid="stSidebar"] [data-testid="stFileUploader"],
+[data-testid="stSidebar"] .uploadedFile {
+  background-color: rgba(1, 51, 102, 0.6) !important;
+  border: 2px dashed rgba(1, 191, 255, 0.4) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
 }
 
-[class*="stSidebar"] [data-baseweb="select"] * {
-  color: #000 !important;
+/* Texto del file uploader */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] label,
+[data-testid="stSidebar"] [data-testid="stFileUploader"] span,
+[data-testid="stSidebar"] [data-testid="stFileUploader"] p {
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
-/* Number input styling */
-[class*="stSidebar"] [data-baseweb="input"] {
-  background-color: #f5f5f5 !important;
+/* Botón "Browse files" */
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button {
+  background-color: #01bfff !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
 }
 
-[class*="stSidebar"] [data-baseweb="input"] input {
-  color: #000 !important;
+[data-testid="stSidebar"] [data-testid="stFileUploader"] button:hover {
+  background-color: #fe933a !important;
 }
 
-/* Sidebar section headers - Keep visible even in expanders */
-[class*="stSidebar"] h1,
-[class*="stSidebar"] h2,
-[class*="stSidebar"] h3,
-[class*="stSidebar"] h4,
-[class*="stSidebar"] h5,
-[class*="stSidebar"] h6 {
-  color: var(--antay-accent-blue) !important;
-  font-weight: 700 !important;
+/* Área de drag and drop */
+[data-testid="stSidebar"] [data-baseweb="file-uploader"] {
+  background-color: transparent !important;
+  border-color: rgba(1, 191, 255, 0.4) !important;
 }
 
-/* Expander button text - MUST be visible */
-[class*="stSidebar"] [class*="stExpander"] summary,
-[class*="stSidebar"] [class*="stExpander"] button {
-  color: var(--antay-accent-blue) !important;
+/* ========================================
+   SLIDERS (Control de Columnas)
+   ======================================== */
+
+/* Container del slider */
+[data-testid="stSidebar"] [data-testid="stSlider"] {
+  padding: 8px 0 !important;
 }
 
-[class*="stSidebar"] [class*="stExpander"] button span {
-  color: var(--antay-accent-blue) !important;
+/* Label del slider */
+[data-testid="stSidebar"] [data-testid="stSlider"] label {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 500 !important;
 }
 
-/* Expander content - Allow proper text visibility */
-[class*="stSidebar"] [class*="stExpander"] {
-  background-color: transparent;
+/* Track del slider - azul claro Antay */
+[data-testid="stSidebar"] [data-baseweb="slider"] [role="slider"] {
+  background-color: #01bfff !important;
 }
 
-[class*="stSidebar"] [class*="stExpanderHeader"] {
-  color: var(--antay-accent-blue) !important;
+[data-testid="stSidebar"] [data-baseweb="slider"] div[data-baseweb="slider-track"] {
+  background-color: rgba(1, 191, 255, 0.3) !important;
 }
 
-/* Info/Success/Warning/Error boxes keep their colors */
-[class*="stSidebar"] [class*="stInfo"],
-[class*="stSidebar"] [class*="stSuccess"],
-[class*="stSidebar"] [class*="stWarning"],
-[class*="stSidebar"] [class*="stError"] {
-  color: inherit !important;
+/* Valor del slider */
+[data-testid="stSidebar"] [data-testid="stSlider"] [data-testid="stMarkdownContainer"] {
+  color: white !important;
 }
 
-/* Make sure metric labels are readable */
-[class*="stSidebar"] [class*="stMetric"] {
-  color: var(--antay-white) !important;
+/* ========================================
+   SELECTBOX Y DROPDOWNS
+   ======================================== */
+
+/* Selectbox container */
+[data-testid="stSidebar"] [data-testid="stSelectbox"] {
+  background-color: transparent !important;
+}
+
+/* Selectbox button/trigger */
+[data-testid="stSidebar"] [data-baseweb="select"] > div {
+  background-color: rgba(1, 51, 102, 0.8) !important;
+  border: 1px solid rgba(1, 191, 255, 0.3) !important;
+  border-radius: 6px !important;
+}
+
+/* Texto en selectbox */
+[data-testid="stSidebar"] [data-baseweb="select"] span,
+[data-testid="stSidebar"] [data-baseweb="select"] div {
+  color: white !important;
+}
+
+/* ================================
+   DROPDOWNS - CONTEXTO PRINCIPAL
+   ================================ */
+
+/* Selectbox en el área principal (texto oscuro) */
+[data-testid="stMain"] [data-baseweb="select"] > div {
+  background-color: #f9fafb !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+}
+
+[data-testid="stMain"] [data-baseweb="select"] span,
+[data-testid="stMain"] [data-baseweb="select"] div {
+  color: #1f2937 !important;
+}
+
+/* Dropdown menu (global legible en área principal) */
+[data-baseweb="popover"] {
+  background-color: #ffffff !important;
+  color: #1f2937 !important;
+}
+
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] span,
+[data-baseweb="popover"] div {
+  color: #1f2937 !important;
+}
+
+[data-baseweb="popover"] li:hover {
+  background-color: #e5f3ff !important;
+}
+
+/* ========================================
+   BOTONES
+   ======================================== */
+
+/* Botón "Cerrar Sesión" y similares */
+[data-testid="stSidebar"] button {
+  background: linear-gradient(135deg, #7c3aed 0%, #db2777 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 8px !important;
+  padding: 12px 24px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-testid="stSidebar"] button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4) !important;
+}
+
+/* Botón "Comprar / Ampliar plan" (verde) */
+[data-testid="stSidebar"] button[kind="primary"] {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"]:hover {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* ========================================
+   SECCIONES Y EXPANDERS
+   ======================================== */
+
+/* Headers de secciones (Configuración, Tu Plan, etc.) */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4 {
+  color: #01bfff !important;
+  font-weight: 600 !important;
+  margin-top: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+/* Iconos al lado de headers */
+[data-testid="stSidebar"] h1::before,
+[data-testid="stSidebar"] h2::before,
+[data-testid="stSidebar"] h3::before {
+  filter: brightness(0) invert(1) !important; /* Iconos blancos */
+}
+
+/* Expanders (secciones desplegables) */
+[data-testid="stSidebar"] [data-testid="stExpander"] {
+  background-color: rgba(1, 51, 102, 0.4) !important;
+  border: 1px solid rgba(1, 191, 255, 0.2) !important;
+  border-radius: 8px !important;
+  margin: 8px 0 !important;
+}
+
+/* Header del expander */
+[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 500 !important;
+}
+
+/* Contenido expandido */
+[data-testid="stSidebar"] .streamlit-expanderContent {
+  background-color: transparent !important;
+  padding: 12px !important;
+}
+
+/* ========================================
+   CARDS Y CONTAINERS
+   ======================================== */
+
+/* Cards de información (plan, vigencia, etc.) */
+[data-testid="stSidebar"] [data-testid="stContainer"],
+[data-testid="stSidebar"] .element-container {
+  background-color: rgba(1, 51, 102, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  margin: 8px 0 !important;
+  border: 1px solid rgba(1, 191, 255, 0.15) !important;
+}
+
+/* ========================================
+   IMÁGENES Y LOGOS
+   ======================================== */
+
+/* Logo actual - mantener visible */
+[data-testid="stSidebar"] img {
+  border-radius: 8px !important;
+  border: 2px solid rgba(1, 191, 255, 0.3) !important;
+  background-color: transparent !important;
+}
+
+/* ========================================
+   LABELS Y TEXTO GENERAL
+   ======================================== */
+
+/* Todos los labels de formulario */
+[data-testid="stSidebar"] label {
+  color: rgba(255, 255, 255, 0.95) !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+}
+
+/* Texto de ayuda / caption */
+[data-testid="stSidebar"] .stCaption,
+[data-testid="stSidebar"] small {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Dividers / separadores */
+[data-testid="stSidebar"] hr {
+  border-color: rgba(1, 191, 255, 0.2) !important;
+  margin: 16px 0 !important;
+}
+
+/* ========================================
+   RADIO BUTTONS Y CHECKBOXES
+   ======================================== */
+
+[data-testid="stSidebar"] input[type="radio"],
+[data-testid="stSidebar"] input[type="checkbox"] {
+  accent-color: #01bfff !important;
+}
+
+/* Labels de radio/checkbox */
+[data-testid="stSidebar"] [data-testid="stRadio"] label,
+[data-testid="stSidebar"] [data-testid="stCheckbox"] label {
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
+/* ========================================
+   ELEMENTOS ESPECÍFICOS IDENTIFICADOS
+   ======================================== */
+
+/* La caja blanca superior (probablemente search o welcome message) */
+[data-testid="stSidebar"] > div:first-child > div {
+  background-color: rgba(1, 51, 102, 0.6) !important;
+  border: 1px solid rgba(1, 191, 255, 0.3) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+}
+
+/* Texto dentro de esa caja */
+[data-testid="stSidebar"] > div:first-child > div * {
+  color: white !important;
+}
+
+/* ========================================
+   OVERRIDE GLOBAL PARA SEGURIDAD
+   ======================================== */
+
+/* FORZAR que NADA en sidebar tenga fondo blanco puro */
+[data-testid="stSidebar"] *:not(img):not(svg) {
+  background-color: transparent !important;
+}
+
+/* FORZAR que todo texto sea visible */
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div:not([data-baseweb]),
+[data-testid="stSidebar"] li {
+  color: rgba(255, 255, 255, 0.9) !important;
 }
 
 /* ============================================================================
@@ -512,4 +1008,170 @@ label {
   [class*="stSidebar"] {
     width: 100%;
   }
+}
+
+/* =============================================================================
+   CP-UX-023: CORRECCION CRITICA - DENSIDAD ENTERPRISE
+   ============================================================================= */
+
+/* Contenedores generales - compacto */
+.element-container {
+  margin: 4px 0 !important;
+}
+
+/* Markdown y texto */
+.stMarkdown {
+  margin-bottom: 8px !important;
+}
+
+/* Cards y contenedores */
+.stContainer, .stExpander {
+  padding: 10px !important;
+  margin: 4px 0 !important;
+}
+
+/* Inputs de formularios */
+.stTextInput, .stSelectbox, .stNumberInput {
+  margin-bottom: 8px !important;
+}
+
+/* Sidebar spacing */
+[data-testid="stSidebar"] .element-container {
+  margin: 4px 0 !important;
+}
+
+[data-testid="stSidebar"] [data-testid="stContainer"],
+[data-testid="stSidebar"] .element-container {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-testid="stSidebar"] hr {
+  margin: 6px 0 !important;
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4 {
+  margin-top: 8px !important;
+  margin-bottom: 4px !important;
+  font-size: 13px !important;
+}
+
+/* Botones corporativos Antay */
+[data-testid="stSidebar"] button {
+  background: linear-gradient(135deg, #013366 0%, #015a9c 100%) !important;
+  color: white !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-testid="stSidebar"] button:hover {
+  background: linear-gradient(135deg, #fe933a 0%, #ff6f00 100%) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 12px rgba(254, 147, 58, 0.3) !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"] {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  padding: 8px 16px !important;
+}
+
+[data-testid="stSidebar"] button[kind="primary"]:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4) !important;
+}
+
+[data-testid="stSidebar"] button[disabled] {
+  background: rgba(1, 51, 102, 0.3) !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  cursor: not-allowed !important;
+}
+
+/* Expanders compactos */
+[data-testid="stExpander"] {
+  margin: 4px 0 !important;
+}
+
+[data-testid="stExpander"] summary {
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+
+.streamlit-expanderContent {
+  padding: 6px 10px !important;
+}
+
+[data-testid="stExpander"] .element-container {
+  margin: 3px 0 !important;
+}
+
+/* Bienvenida sidebar - caja superior */
+[data-testid="stSidebar"] > div:first-child > div {
+  padding: 10px !important;
+}
+
+/* =============================================================================
+   CP-UX-023: LIMPIEZA BARRA SUPERIOR Y ESPACIO EN BLANCO
+   ============================================================================= */
+
+/* Ocultar barra superior de Streamlit (recuadro vacío) */
+header[data-testid="stHeader"] {
+  height: 2rem !important;
+  visibility: visible !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+div[data-testid="stDecoration"] {
+  display: none !important;
+}
+
+/* Mantener toolbar pero ocultar acciones de la derecha */
+div[data-testid="stToolbar"] {
+  display: flex !important;
+  align-items: center !important;
+}
+
+button[data-testid="stDeployButton"],
+button[title="Deploy"],
+button[aria-label="Deploy"],
+button[title="Settings"],
+button[aria-label="Settings"],
+button[title="Menu"],
+button[aria-label="Menu"],
+button[title="More"],
+button[aria-label="More"] {
+  display: none !important;
+}
+
+/* Reducir espacio superior del contenido principal */
+section.main > div {
+  padding-top: 0.25rem !important;
+}
+
+.block-container {
+  padding-top: 0.25rem !important;
+}
+
+/* Sidebar toggle siempre visible */
+button[data-testid="stSidebarToggle"] {
+  position: fixed !important;
+  top: 6px !important;
+  left: 6px !important;
+  z-index: 1000 !important;
+  background: #013366 !important;
+  color: white !important;
+  border-radius: 6px !important;
+  padding: 6px !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15) !important;
+  display: inline-flex !important;
+  visibility: visible !important;
 }

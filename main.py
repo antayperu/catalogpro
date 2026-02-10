@@ -1,4 +1,5 @@
 ﻿import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -44,52 +45,19 @@ def load_antay_theme():
     - Naranja dark: #ff6f00 (warnings)
     """
     try:
-        with open('styles/antay_theme.css') as f:
+        with open('styles/antay_theme.css', encoding='utf-8') as f:
             st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
     except FileNotFoundError:
         st.warning("Archivo de estilos no encontrado. Usando tema por defecto.")
+    except UnicodeDecodeError as e:
+        st.error(f"Error de codificación al leer antay_theme.css: {e}. Asegúrate que el archivo esté en UTF-8.")
 
 # ============================================
 # TAREA 3: HEADER CORPORATIVO ANTAY
 # ============================================
 
-def render_antay_header():
-    """
-    Renderiza el header principal con identidad corporativa Antay Perú.
-    Incluye gradiente corporativo y versión de la app.
-    """
-    st.markdown("""
-    <div style="
-        background: linear-gradient(135deg, #013366 0%, #01bfff 100%);
-        padding: 24px 32px;
-        border-radius: 8px;
-        margin-bottom: 32px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    ">
-        <h1 style="
-            color: white; 
-            margin: 0; 
-            font-size: 28px; 
-            font-weight: 700;
-        ">
-            CatalogPro
-        </h1>
-        <p style="
-            color: rgba(255,255,255,0.8); 
-            margin: 4px 0 0 0; 
-            font-size: 14px;
-            font-weight: 400;
-        ">
-            by Antay Perú · v1.7.0
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# Cargar tema corporativo al inicio
+# Cargar tema corporativo al inicio (solo UNA VEZ)
 load_antay_theme()
-
-# Renderizar header corporativo
-render_antay_header()
 
 class NumberedCanvas(canvas.Canvas):
     """Canvas avanzado que soporta 'Página X de Y'"""
@@ -139,21 +107,31 @@ def load_antay_theme():
     except Exception as e:
         print(f"[WARNING] No se pudo cargar tema Antay: {e}")
 
-def render_antay_header():
-    """Renderiza el header corporativo Antay con gradiente y branding"""
-    header_html = """
-    <div class="antay-header">
-        <h1>CATALOGPRO</h1>
-        <p>Catálogos Digitales Profesionales | Powered by Antay Perú</p>
-    </div>
-    """
-    st.markdown(header_html, unsafe_allow_html=True)
+class NumberedCanvas(canvas.Canvas):
+    """Canvas avanzado que soporta 'Página X de Y'"""
+    def __init__(self, *args, **kwargs):
+        canvas.Canvas.__init__(self, *args, **kwargs)
+        self._saved_page_states = []
 
-# Cargar tema corporativo Antay
-load_antay_theme()
+    def showPage(self):
+        self._saved_page_states.append(dict(self.__dict__))
+        self._startPage()
 
-# =============================================================================
-# CLASES AUXILIARES MEJORADAS v1.2
+    def save(self):
+        """Metodo mágico que rellena el total de páginas al final"""
+        num_pages = len(self._saved_page_states)
+        for state in self._saved_page_states:
+            self.__dict__.update(state)
+            self.draw_page_number(num_pages)
+            canvas.Canvas.showPage(self)
+        canvas.Canvas.save(self)
+
+    def draw_page_number(self, page_count):
+        self.setFont("Helvetica", 9)
+        self.setFillColor(colors.HexColor('#7f8c8d'))
+        page_text = f"Página {self._pageNumber} de {page_count}"
+        self.drawRightString(A4[0] - 50, 40, page_text)
+
 # =============================================================================
 
 class DataHandler:
@@ -1540,38 +1518,98 @@ class EnhancedCatalogApp:
         auth = st.session_state.auth_manager
         
         plan_type = "Free"
+        license_mode = "quantity"
         current_quota = 5
         expiry_date = None
+        max_catalogs = None
+        current_catalogs = None
         
         if auth and user_email:
-            user_info = auth.get_user_info(user_email)
-            plan_type = user_info.get("plan_type", "Free")
-            current_quota = user_info.get("quota", 0)
-            expiry_date_str = user_info.get("expires_at", None)
+            auth.refresh_user(user_email)
+            snapshot = auth.get_license_snapshot(user_email)
+            plan_type = snapshot.get("plan_type", "Free")
+            license_mode = snapshot.get("license_mode", "quantity")
+            current_quota = snapshot.get("remaining", 0)
+            expiry_date_str = snapshot.get("expiry_date", None)
+            max_catalogs = snapshot.get("max_catalogs")
+            current_catalogs = snapshot.get("current_catalogs")
             
             # Validar vencimiento
             is_expired = False
-            if expiry_date_str:
+            if license_mode == "date" and expiry_date_str:
                 try:
                     exp_date = datetime.strptime(expiry_date_str, "%Y-%m-%d").date()
                     if exp_date < datetime.now().date():
                         is_expired = True
                 except:
                     pass # Fecha inválida no bloquea (fallback seguro?) O bloquea? Asumimos no bloquea por ahora.
-            
-            # Si está vencido o sin saldo (y no es tiempo ilimitado), bloquear
-            # FRD: "Cuota agotada o licencia vencida => bloqueo total"
-            if is_expired:
-                current_quota = 0 # Forzar a 0 para bloquear consumo
-                expiry_date = expiry_date_str + " (VENCIDO)"
-            else:
-                expiry_date = expiry_date_str
+
+            # Si está vencido, bloquear visualmente
+            if license_mode == "date":
+                if is_expired:
+                    expiry_date = f"{expiry_date_str} (VENCIDO)"
+                else:
+                    expiry_date = expiry_date_str
 
         return {
             'plan_type': plan_type,
+            'license_mode': license_mode,
             'remaining': current_quota,  # Catálogos restantes
-            'expiry_date': expiry_date
+            'expiry_date': expiry_date,
+            'max_catalogs': max_catalogs,
+            'current_catalogs': current_catalogs
         }
+
+    def format_license_info(self, auth, email, info):
+        snapshot = auth.get_license_snapshot(email)
+        plan_type = info.get("plan_type") or snapshot.get("plan_type") or "Free"
+        license_mode = info.get("license_mode") or snapshot.get("license_mode")
+
+        plan_lower = str(plan_type).lower()
+        expiry = info.get("expires_at") or info.get("expiry_date") or snapshot.get("expiry_date")
+        quota_val = info.get("quota")
+        quota_max = info.get("quota_max") or info.get("max_catalogs") or snapshot.get("max_catalogs")
+
+        if not license_mode:
+            if "fecha" in plan_lower or "date" in plan_lower:
+                license_mode = "date"
+            elif "cantidad" in plan_lower or "quantity" in plan_lower:
+                license_mode = "quantity"
+            elif quota_max is not None and int(quota_max or 0) > 0:
+                license_mode = "quantity"
+            elif quota_val is not None and int(quota_val or 0) > 0:
+                license_mode = "quantity"
+            elif expiry:
+                license_mode = "date"
+            else:
+                license_mode = "quantity"
+
+        if license_mode == "quantity":
+            max_catalogs = snapshot.get("max_catalogs") or quota_max
+            current_catalogs = snapshot.get("current_catalogs") or info.get("current_catalogs")
+            remaining = snapshot.get("remaining")
+
+            if current_catalogs is None and max_catalogs is not None:
+                try:
+                    quota_remaining = quota_val if quota_val is not None else remaining
+                    if quota_remaining is not None:
+                        current_catalogs = max(0, int(max_catalogs) - int(quota_remaining))
+                except (TypeError, ValueError):
+                    current_catalogs = None
+
+            if current_catalogs is not None and max_catalogs is not None:
+                detail = f"Créditos: **{current_catalogs} / {max_catalogs}**"
+            elif remaining is not None:
+                detail = f"Créditos disponibles: **{remaining}**"
+            elif quota_val is not None:
+                detail = f"Créditos disponibles: **{quota_val}**"
+            else:
+                detail = "Créditos: **0**"
+        else:
+            expiry = expiry or "Indefinido"
+            detail = f"Vence: {expiry}"
+
+        return plan_type, detail
         
     def run(self):
         # PRIMERO: Verificar autenticación
@@ -1601,7 +1639,7 @@ class EnhancedCatalogApp:
 
         # DESPUÉS: Continuar normal
         self.setup_styles()
-        self.render_header()
+        self.render_antay_header()
         self.render_sidebar(is_admin)
         self.render_main_content(is_admin)
         
@@ -1748,72 +1786,216 @@ class EnhancedCatalogApp:
         """, unsafe_allow_html=True)
         
 
-    def render_header(self):
-        # CP-UX-023: Header Corporativo Antay (Paleta Corporativa)
+    def clear_browser_cache(self):
+        # Best-effort localStorage cleanup (no-op if blocked)
+        components.html(
+            "<script>try { localStorage.clear(); } catch (e) {}</script>",
+            height=0,
+            width=0,
+        )
+
+    def logout(self):
+        self.clear_browser_cache()
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+
+    def render_antay_header(self):
+        # CP-UX-023: Header Corporativo Antay (jerarquía reforzada)
         ver = version.__version__
         st.markdown(f"""
         <style>
         .antay-corporate-header {{
-            background: linear-gradient(135deg, #013366 0%, #0a1f3f 100%);
-            padding: 1.5rem;
-            border-radius: 12px;
+            background: linear-gradient(135deg, #013366 0%, #01bfff 100%);
+            padding: 10px 18px;
+            border-radius: 8px;
             color: white;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-bottom: 14px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-left: 5px solid #fe933a;
+            border-left: 4px solid #fe933a;
         }}
-        .header-content h1 {{
+        .antay-header-title {{
             color: white !important;
-            margin: 0;
-            font-size: 1.8rem;
-            font-weight: 700;
-            letter-spacing: 0.5px;
+            margin: 0 0 6px 0;
+            font-size: 42px !important;
+            font-weight: 900 !important;
+            line-height: 1.05;
+            letter-spacing: -0.2px;
         }}
-        .header-content p {{
-            color: #01bfff;
+        .antay-header-subtitle {{
+            color: rgba(255,255,255,0.95);
             margin: 0;
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 16px !important;
+            font-weight: 500 !important;
+            line-height: 1.2;
         }}
         .version-badge {{
             background: #fe933a;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 12px !important;
+            font-weight: 600 !important;
             color: white;
         }}
         </style>
 
         <div class="antay-corporate-header">
             <div class="header-content">
-                <h1>CatalogPro Enhanced</h1>
-                <p>Catálogos Digitales Profesionales | Antay Perú</p>
+                <div class="antay-header-title">CatalogPro Enhanced</div>
+                <div class="antay-header-subtitle">Catálogos Digitales Profesionales | Antay Perú</div>
             </div>
             <div>
                 <span class="version-badge">v{ver}</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    def render_header(self):
+        # Wrapper legacy (mantener compatibilidad interna)
+        self.render_antay_header()
     
 
-    def render_sidebar(self, is_admin):
-        st.sidebar.header("📊 Configuración")
+    def render_sidebar_user_info(self):
+        # Compact welcome message (Antay corporate style)
+        user_info = st.session_state.user_info or {}
+        user_display_name = user_info.get('name', '')
+        user_business = user_info.get('business_name', '')
+
+        st.sidebar.markdown(
+            f"""
+            <div style="
+                background: rgba(1, 51, 102, 0.6);
+                border: 1px solid rgba(1, 191, 255, 0.3);
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 12px;
+            ">
+                <p class="antay-welcome-label" style="
+                    color: rgba(255,255,255,0.6);
+                    margin: 0 0 4px 0;
+                    font-size: 9px !important;
+                    font-weight: 600 !important;
+                    text-transform: uppercase;
+                    letter-spacing: 0.6px;
+                ">BIENVENIDO</p>
+                <h3 class="antay-user-name" style="
+                    color: white;
+                    margin: 0 0 4px 0;
+                    font-size: 20px !important;
+                    font-weight: 800 !important;
+                ">👋 {user_display_name}</h3>
+                <p class="antay-business-name" style="
+                    color: rgba(1, 191, 255, 0.9);
+                    margin: 0;
+                    font-size: 12px !important;
+                    font-weight: 400 !important;
+                ">{user_business}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        if st.sidebar.button(" Cerrar Sesión", use_container_width=True, type="secondary"):
+            self.logout()
+
+    def render_brand_configuration(self, baseline):
+        def value_for(key, fallback):
+            value = baseline.get(key)
+            return value if value else fallback
+
+        color_primary   = value_for('brand_primary',   '#fe933a')
+        color_secondary = value_for('brand_secondary', '#013366')
+        color_accent    = value_for('brand_accent',    '#01bfff')
+        color_text      = value_for('brand_text',      '#1f2937')
+
+        with st.sidebar.expander("🎨 Configuración de Marca", expanded=False):
+            st.markdown("""
+                <style>
+                input[type="color"] {
+                    -webkit-appearance: none;
+                    -moz-appearance: none;
+                    appearance: none;
+                    width: 100% !important;
+                    height: 80px !important;
+                    border: none !important;
+                    border-radius: 8px !important;
+                    cursor: pointer;
+                    padding: 0 !important;
+                    display: block;
+                }
+                input[type="color"]::-webkit-color-swatch-wrapper {
+                    padding: 0;
+                    width: 100%;
+                    height: 100%;
+                    border-radius: 8px;
+                }
+                input[type="color"]::-webkit-color-swatch {
+                    border: none;
+                    border-radius: 8px;
+                    width: 100%;
+                    height: 100%;
+                }
+                input[type="color"]::-moz-color-swatch {
+                    border: none;
+                    border-radius: 8px;
+                    width: 100%;
+                    height: 100%;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+
+            tab1, tab2, tab3, tab4 = st.tabs(["Primario", "Secundario", "Acento", "Texto"])
+
+            with tab1:
+                st.markdown("**Color Primario**")
+                _p = st.session_state.get('cfg_brand_primary', color_primary)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_p};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_primary = st.color_picker("", value=color_primary, key="cfg_brand_primary", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_primary}")
+
+            with tab2:
+                st.markdown("**Color Secundario**")
+                _s = st.session_state.get('cfg_brand_secondary', color_secondary)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_s};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_secondary = st.color_picker("", value=color_secondary, key="cfg_brand_secondary", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_secondary}")
+
+            with tab3:
+                st.markdown("**Color de Acento**")
+                _a = st.session_state.get('cfg_brand_accent', color_accent)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_a};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_accent = st.color_picker("", value=color_accent, key="cfg_brand_accent", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_accent}")
+
+            with tab4:
+                st.markdown("**Color de Texto**")
+                _t = st.session_state.get('cfg_brand_text', color_text)
+                st.markdown(f'<div style="width:100%;height:130px;box-shadow:inset 0 0 0 1000px {_t};border-radius:8px;border:1px solid rgba(255,255,255,0.25);"></div>', unsafe_allow_html=True)
+                cfg_brand_text = st.color_picker("", value=color_text, key="cfg_brand_text", label_visibility="collapsed")
+                st.caption(f"Hex: {cfg_brand_text}")
+
+        return cfg_brand_primary, cfg_brand_secondary, cfg_brand_accent, cfg_brand_text
+    def render_sidebar_navigation(self, is_admin):
+        st.sidebar.markdown("<div style='height:0.2rem'></div>", unsafe_allow_html=True)
+        st.sidebar.markdown("<span style='font-size:1.0em;font-weight:600;color:#fe933a;'>📊 Configuración</span>", unsafe_allow_html=True)
         
         auth = st.session_state.auth_manager
         user_email = st.session_state.user_email
-        user_info = st.session_state.user_info
+        user_info = st.session_state.user_info or {}
 
         # CP-UX-003: Tarjeta Plan y uso
         st.sidebar.markdown("---")
 
         plan_status = self.get_user_plan_status(user_email)
         plan_type = plan_status['plan_type']
+        license_mode = plan_status.get('license_mode', 'quantity')
         remaining = plan_status['remaining']
         expiry_date = plan_status['expiry_date']
+        max_catalogs = plan_status.get('max_catalogs')
+        current_catalogs = plan_status.get('current_catalogs')
 
         # Mostrar tipo de plan (actualizado para nuevos tipos)
         st.sidebar.markdown("### 💎 Tu Plan")
@@ -1826,30 +2008,38 @@ class EnhancedCatalogApp:
             st.sidebar.info(f"📋 **{plan_type}**")
 
         # DEBUG: Log para verificar plan status
-        print(f"[DEBUG SIDEBAR] plan_type={plan_type}, remaining={remaining}, expiry_date={expiry_date}")
+        print(f"[DEBUG SIDEBAR] plan_type={plan_type}, license_mode={license_mode}, remaining={remaining}, expiry_date={expiry_date}")
 
-        # Mostrar saldo o vigencia (según tipo de plan)
-        if "Cantidad" in plan_type and remaining is not None:
-            if remaining > 0:
-                st.sidebar.metric("Catálogos Disponibles", remaining, delta=None)
+        # Mostrar saldo o vigencia (según modo de licencia)
+        if license_mode == "quantity":
+            display_remaining = remaining
+            if max_catalogs is not None and current_catalogs is not None:
+                try:
+                    display_remaining = max(0, int(max_catalogs) - int(current_catalogs))
+                    st.sidebar.caption(f"Usados: {current_catalogs}/{max_catalogs}")
+                except (TypeError, ValueError):
+                    pass
+
+            if display_remaining is not None and display_remaining > 0:
+                st.sidebar.metric("Catálogos Disponibles", display_remaining, delta=None)
             else:
                 st.sidebar.error("❌ No hay catálogos disponibles")
 
-        # Mostrar fecha de vencimiento para planes con límite de tiempo
-        if expiry_date and expiry_date.strip():  # Verificar que no sea None o vacío
-            # Extraer fecha sin el texto " (VENCIDO)"
-            date_only = expiry_date.replace(" (VENCIDO)", "").strip()
+        if license_mode == "date":
+            # Mostrar fecha de vencimiento para planes con límite de tiempo
+            if expiry_date and str(expiry_date).strip():
+                # Extraer fecha sin el texto " (VENCIDO)"
+                date_only = expiry_date.replace(" (VENCIDO)", "").strip()
 
-            # Determinar si está vencido
-            is_vencido = "(VENCIDO)" in expiry_date
+                # Determinar si está vencido
+                is_vencido = "(VENCIDO)" in expiry_date
 
-            if is_vencido:
-                st.sidebar.error(f"⏰ **Vence:** {date_only}\n⚠️ **EXPIRADO**")
+                if is_vencido:
+                    st.sidebar.error(f"⏰ **Vence:** {date_only}\n⚠️ **EXPIRADO**")
+                else:
+                    st.sidebar.success(f"⏰ **Vigente hasta:** {date_only}")
             else:
-                st.sidebar.success(f"⏰ **Vigente hasta:** {date_only}")
-        elif "Fecha" in plan_type:
-            # Si es un plan de fecha pero no hay expiry_date, mostrar aviso
-            st.sidebar.warning(f"⚠️ Información de vencimiento no disponible")
+                st.sidebar.warning(f"⚠️ Información de vencimiento no disponible")
         
         # CTA WhatsApp
         whatsapp_number = "51921566036"
@@ -1874,6 +2064,10 @@ class EnhancedCatalogApp:
         # Inicializar baseline solo si no existe o si cambió el usuario
         # Normalizamos valores: None -> "" para texto, int para números
         if 'cfg_baseline' not in st.session_state or st.session_state.get('cfg_user_key') != user_email:
+            default_brand_primary = user_info.get('brand_primary') or st.session_state.get('brand_primary') or '#fe933a'
+            default_brand_secondary = user_info.get('brand_secondary') or st.session_state.get('brand_secondary') or '#013366'
+            default_brand_accent = user_info.get('brand_accent') or st.session_state.get('brand_accent') or '#01bfff'
+            default_brand_text = user_info.get('brand_text') or st.session_state.get('brand_text') or '#1f2937'
             st.session_state['cfg_baseline'] = {
                 'business_name': str(user_info.get('business_name') or ''),
                 'currency': user_info.get('currency', 'S/') if user_info.get('currency') in ["S/", "$", "€", "£"] else "S/",
@@ -1883,10 +2077,10 @@ class EnhancedCatalogApp:
                 'pdf_custom_subtitle': str(user_info.get('pdf_custom_subtitle') or ''),
                 'pdf_columns': int(user_info.get('pdf_columns', 2)),
                 'pdf_use_pro': bool(user_info.get('pdf_use_pro', True) if 'pdf_use_pro' in user_info else True),
-                'brand_primary': st.session_state.get('brand_primary') or '#2c3e50',
-                'brand_secondary': st.session_state.get('brand_secondary') or '#e74c3c',
-                'brand_accent': st.session_state.get('brand_accent') or '#3498db',
-                'brand_text': st.session_state.get('brand_text') or '#2c3e50'
+                'brand_primary': default_brand_primary,
+                'brand_secondary': default_brand_secondary,
+                'brand_accent': default_brand_accent,
+                'brand_text': default_brand_text
             }
             st.session_state['cfg_user_key'] = user_email
             
@@ -1901,7 +2095,7 @@ class EnhancedCatalogApp:
 
         with st.sidebar.expander("🎨 Diseño", expanded=False):
             cfg_columns = st.slider("Columnas", 1, 4, baseline['columns_catalog'], key="cfg_columns")
-            
+
             # Logo Handling
             st.markdown("**Logotipo**")
             current_logo_b64 = user_info.get('logo_base64')
@@ -1912,13 +2106,30 @@ class EnhancedCatalogApp:
                     st.image(image_data, caption="Logo Actual", width=150)
                 except:
                     pass
-            
-            uploaded_logo = st.file_uploader("Actualizar Logo", type=['png','jpg','jpeg'], key="cfg_logo_upload")
-            
-            cfg_pdf_title = st.text_input("Título PDF", value=baseline['pdf_custom_title'], key="cfg_pdf_title")
-            cfg_pdf_subtitle = st.text_input("Subtítulo PDF", value=baseline['pdf_custom_subtitle'], key="cfg_pdf_subtitle")
+
+            st.markdown("#### Actualizar Logo")
+            uploaded_logo = st.file_uploader(
+                "Selecciona una imagen",
+                type=['png', 'jpg', 'jpeg'],
+                help="Formatos: PNG, JPG. Tamaño máximo: 5MB",
+                label_visibility="collapsed",
+                key="cfg_logo_upload"
+            )
+
+            cfg_pdf_title = st.text_input(
+                "Título PDF",
+                value=baseline['pdf_custom_title'],
+                key="cfg_pdf_title",
+                help="Título que aparecerá en el PDF generado"
+            )
+            cfg_pdf_subtitle = st.text_input(
+                "Subtítulo PDF",
+                value=baseline['pdf_custom_subtitle'],
+                key="cfg_pdf_subtitle",
+                help="Subtítulo opcional para el PDF"
+            )
             cfg_pdf_cols = st.slider("Columnas PDF", 1, 3, baseline['pdf_columns'], key="cfg_pdf_cols")
-            
+
             # Map Pro Layout boolean to index for Selectbox
             layout_idx = 0 if baseline['pdf_use_pro'] else 1
             cfg_pdf_layout_str = st.selectbox(
@@ -1928,19 +2139,11 @@ class EnhancedCatalogApp:
                 key="cfg_pdf_layout"
             )
 
-        with st.sidebar.expander("🎨 Configuración de Marca", expanded=False):
-            # Defaults
-            DEFAULT_COLORS = {'primary': '#2c3e50', 'secondary': '#e74c3c', 'accent': '#3498db', 'text': '#2c3e50'}
-            # Fallback logic for Baseline vs Session vs Defaults
-            # Here baseline should rule what shows up in the picker initially
-            
-            c_b1, c_b2 = st.columns(2)
-            cfg_brand_primary = c_b1.color_picker("Primario", value=baseline['brand_primary'], key="cfg_brand_primary")
-            cfg_brand_secondary = c_b2.color_picker("Secundario", value=baseline['brand_secondary'], key="cfg_brand_secondary")
-            
-            c_b3, c_b4 = st.columns(2)
-            cfg_brand_accent = c_b3.color_picker("Acento", value=baseline['brand_accent'], key="cfg_brand_accent")
-            cfg_brand_text = c_b4.color_picker("Texto", value=baseline['brand_text'], key="cfg_brand_text")
+        self.render_brand_configuration(baseline)
+        cfg_brand_primary = st.session_state.get('cfg_brand_primary', baseline.get('brand_primary', '#fe933a'))
+        cfg_brand_secondary = st.session_state.get('cfg_brand_secondary', baseline.get('brand_secondary', '#013366'))
+        cfg_brand_accent = st.session_state.get('cfg_brand_accent', baseline.get('brand_accent', '#01bfff'))
+        cfg_brand_text = st.session_state.get('cfg_brand_text', baseline.get('brand_text', '#1f2937'))
 
         # C) NORMALIZACIÓN & DETECCIÓN (Change Detection)
         
@@ -2026,112 +2229,84 @@ class EnhancedCatalogApp:
                      st.error("No se pudo guardar la configuración. Intenta nuevamente")
 
         st.sidebar.markdown("---")
-        ver = version.__version__
-        st.sidebar.caption(f"v{ver}")
 
-                
+    def render_sidebar(self, is_admin):
+        # Ensure baseline session state for critical fields (avoid PDF failures)
+        user_info = st.session_state.user_info
+        if user_info:
+            st.session_state.setdefault('business_name', user_info.get('business_name', ''))
+            st.session_state.setdefault('currency', user_info.get('currency', 'S/'))
+            st.session_state.setdefault('phone_number', user_info.get('phone_number', ''))
+            st.session_state.setdefault('pdf_use_pro', user_info.get('pdf_use_pro', True))
+            st.session_state.setdefault('pdf_custom_title', user_info.get('pdf_custom_title', ''))
+            st.session_state.setdefault('pdf_custom_subtitle', user_info.get('pdf_custom_subtitle', ''))
+
+        self.render_sidebar_user_info()
+        self.render_sidebar_navigation(is_admin)
+
     def render_main_content(self, is_admin):
-        # Define Tabs
-        # Base tabs (CP-UX-023: Iconos reducidos a 1-2 por sección)
-        tabs_titles = ["Cargar", "Catálogo", "WhatsApp", "Descargar PDF", "Email", "Seguridad"]
+        """Contenido principal con tabs post-login"""
+        tabs_titles = [
+            "📊 Cargar",
+            "👀 Preview",
+            "📄 Exportar",
+            "📤 Compartir",
+            "🔒 Seguridad",
+        ]
         if is_admin:
-             tabs_titles.append("Admin")
-        
-        # Create Tabs
+            tabs_titles.append("🛠️ Admin")
+
         tabs = st.tabs(tabs_titles)
-        
-        # 0. Cargar
+
         with tabs[0]:
             self.render_data_loading()
-            
-        # 1. Catálogo (Preview)
+
         with tabs[1]:
-            if 'df' in st.session_state and st.session_state.df is not None:
-                # Set defaults for view settings
-                if 'items_per_page' not in st.session_state:
-                    st.session_state.items_per_page = 48
-                if 'show_preview_images' not in st.session_state:
-                    st.session_state.show_preview_images = True
+            self.render_catalog()
 
-                self.render_catalog()
-            else:
-                self.render_empty_state('no_data', 'catalog_tab_no_df')
-                
-        # 2. WhatsApp
         with tabs[2]:
-             if hasattr(self, 'render_whatsapp_tab'):
-                 self.render_whatsapp_tab()
-             else:
-                 st.info("Módulo WhatsApp en construcción")
-             
-        # 3. Exportar (PDF)
-        with tabs[3]:
-            # Export tab - Decoupled
             self.render_export_options()
-            
-        # 4. Email
-        with tabs[4]:
-             if hasattr(self, 'render_email_interface'):
-                self.render_email_interface()
-             else:
-                 st.info("Módulo Email en construcción")
+ 
+        with tabs[3]:
+            st.info("🚧 Próximamente - Esta funcionalidad estará disponible en la próxima versión")
 
-        # 5. Seguridad (Nuevo Feature CP-FEAT-016)
-        with tabs[5]:
+        with tabs[4]:
             self.render_security_tab()
 
-        # 6. Admin (Opcional)
-        if is_admin and len(tabs) > 6:
-            with tabs[6]:
-                if hasattr(self, 'render_admin_panel'):
-                    self.render_admin_panel()
-                else:
-                    st.warning("Panel de Admin no encontrado")
+        if is_admin:
+            with tabs[5]:
+                self.render_admin_panel()
 
     def render_security_tab(self):
         """Tab de seguridad para cambio de contraseña"""
         st.header("Seguridad")
-        st.markdown("Gestiona la seguridad de tu cuenta.")
-        
-        c1, c2 = st.columns([1, 2])
-        
-        with c1:
-            st.info("Al cambiar tu contraseña, se cerrará tu sesión automáticamente para verificar las nuevas credenciales")
-            
-        with c2:
-            with st.form("change_password_form", clear_on_submit=True):
-                st.subheader("Cambiar Contraseña")
-                current_pass = st.text_input("Contraseña Actual", type="password")
-                new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
-                confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
-                
-                submitted = st.form_submit_button("Actualizar Contraseña", type="primary", use_container_width=True)
-                
-                if submitted:
-                    auth = st.session_state.auth_manager
-                    user_email = st.session_state.user_email
-                    
-                    if not current_pass or not new_pass:
-                        st.error("Todos los campos son obligatorios")
-                    elif new_pass != confirm_pass:
-                        st.error("Las nuevas contraseñas no coinciden")
-                    elif len(new_pass) < 6:
-                        st.error("La contraseña debe tener al menos 6 caracteres")
-                    else:
-                        with st.spinner("Actualizando..."):
-                            result = auth.change_password(user_email, current_pass, new_pass)
-                            
-                        if result["success"]:
-                            st.success("Contraseña actualizada exitosamente")
-                            st.balloons()
-                            time.sleep(2)
-                            # Logout for security
-                            st.session_state.authenticated = False
-                            st.rerun()
-                        else:
-                            st.error(f"{result['message']}")
-                            if result.get("error_code") == "INVALID_CURRENT":
-                                st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
+        st.subheader("Cambiar Contraseña")
+        current_pass = st.text_input("Contraseña Actual", type="password")
+        new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
+        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
+
+        if st.button("Actualizar Contraseña", type="primary", use_container_width=True):
+            auth = st.session_state.auth_manager
+            if not current_pass or not new_pass:
+                st.error("Todos los campos son obligatorios")
+            elif new_pass != confirm_pass:
+                st.error("Las nuevas contraseñas no coinciden")
+            elif len(new_pass) < 6:
+                st.error("La contraseña debe tener al menos 6 caracteres")
+            else:
+                with st.spinner("Actualizando..."):
+                    result = auth.change_password(user_email, current_pass, new_pass)
+
+                if result["success"]:
+                    st.success("Contraseña actualizada exitosamente")
+                    st.balloons()
+                    time.sleep(2)
+                    st.session_state.authenticated = False
+                    st.rerun()
+                else:
+                    st.error(f"{result['message']}")
+                    if result.get("error_code") == "INVALID_CURRENT":
+                        st.warning("Verifica que estés ingresando correctamente tu contraseña actual.")
     
     def render_empty_state(self, tipo, context=''):
         states = {
@@ -3012,7 +3187,13 @@ class EnhancedCatalogApp:
         with c2:
             st.subheader("Catálogo Web (HTML)")
             st.caption("Genera un archivo HTML ligero para compartir como página web.")
-            if st.button("Generar HTML", key="ghml", type="primary"):
+            if st.button(
+                "Generar HTML",
+                key="ghml",
+                type="primary",
+                disabled=True,
+                help="Disponible próximamente",
+            ):
                 try:
                     with st.spinner("Generando HTML..."):
                         html = self.html_exporter.generate_html_catalog(
@@ -3343,6 +3524,7 @@ class EnhancedCatalogApp:
         
         st.subheader("Usuarios Autorizados")
         
+        auth.refresh_users()
         users_list = auth.get_all_users()
         
         if not users_list:
@@ -3387,13 +3569,11 @@ class EnhancedCatalogApp:
                             st.caption(" | ".join(status_indicators))
 
                     with c_plan:
-                        plan = info.get('plan_type', 'Free')
-                        quota = info.get('quota', 0)
-                        expiry = info.get('expires_at') or "Indefinido"
-                        
+                        plan, license_detail = self.format_license_info(auth, email, info)
+
                         # Badge-like display for Plan
                         st.markdown(f"**Plan:** `{plan}`")
-                        st.caption(f"Créditos: **{quota}** | Vence: {expiry}")
+                        st.caption(license_detail)
 
                     with c_actions:
                         if email != auth.admin_email:
@@ -3468,6 +3648,10 @@ class EnhancedCatalogApp:
                                         if email != auth.admin_email:
                                              auth.users["users"][email]['is_admin'] = is_admin_check
 
+                                        # 2.1 Update License Mode (date vs quantity)
+                                        license_mode = "date" if "Fecha" in e_plan else "quantity"
+                                        auth.users["users"][email]['license_mode'] = license_mode
+
                                         auth._save_users()
 
                                         # 3. Update License details - Mapear nuevo formato a internal format
@@ -3479,8 +3663,23 @@ class EnhancedCatalogApp:
                                         }
 
                                         plan_type_to_save, quota_to_save = edit_plan_mapping.get(e_plan, ("Free", e_quota))
-                                        new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
-                                        if auth.update_user_plan_details(email, plan_type=plan_type_to_save, quota=quota_to_save, quota_max=quota_to_save, expires_at=new_expiry_str):
+                                        clear_expiry = False
+                                        if license_mode == "date":
+                                            new_expiry_str = e_expiry.strftime("%Y-%m-%d") if e_expiry else None
+                                        else:
+                                            # Clear expiry for quantity plans
+                                            new_expiry_str = None
+                                            clear_expiry = True
+
+                                        if auth.update_user_plan_details(
+                                            email,
+                                            plan_type=plan_type_to_save,
+                                            quota=quota_to_save,
+                                            quota_max=quota_to_save,
+                                            expires_at=new_expiry_str,
+                                            license_mode=license_mode,
+                                            clear_expiry=clear_expiry
+                                        ):
                                             st.toast("✅ Perfil actualizado correctamente")
                                             time.sleep(1)
                                             st.rerun()
