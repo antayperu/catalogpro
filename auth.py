@@ -38,6 +38,11 @@ class AuthBackend(ABC):
     def save_users(self, users_data: dict):
         pass
 
+    def load_user(self, email: str) -> dict:
+        """Carga un usuario específico. Por defecto recarga todos y filtra."""
+        users_data = self.load_users()
+        return users_data.get("users", {}).get(email.lower(), {})
+
 class JsonBackend(AuthBackend):
     """Backend local usando archivo JSON"""
     def __init__(self, filename="authorized_users.json"):
@@ -277,6 +282,49 @@ class SupabaseBackend(AuthBackend):
         self.client: Client = create_client(supabase_url, supabase_key)
         self.table = "users"
 
+    def _normalize_row(self, row: dict) -> dict:
+        def to_int(val, default=None):
+            if val is None or val == "":
+                return default
+            try:
+                return int(val)
+            except (TypeError, ValueError):
+                return default
+
+        quota_val = to_int(row.get("quota", 5), 5)
+        quota_max_val = to_int(row.get("quota_max"), quota_val)
+
+        return {
+            "name": row.get("name", "Usuario"),
+            "business_name": row.get("business_name", ""),
+            "phone_number": row.get("phone_number", ""),
+            "currency": row.get("currency", "S/"),
+            "pdf_custom_title": row.get("pdf_custom_title"),
+            "pdf_custom_subtitle": row.get("pdf_custom_subtitle"),
+            "is_admin": bool(row.get("is_admin", False)),
+            "status": row.get("status", "active"),
+            "password_hash": row.get("password_hash"),
+            "plan_type": row.get("plan_type", "Free"),
+            "license_mode": row.get("license_mode"),
+            "quota": quota_val,
+            "quota_max": quota_max_val,
+            "expires_at": row.get("expires_at") or row.get("expiry_date"),
+            "created_at": row.get("created_at"),
+            "last_login": row.get("last_login"),
+            "logo_base64": row.get("logo_base64"),
+            "logo_path": row.get("logo_path"),
+            "max_catalogs": to_int(row.get("max_catalogs"), None),
+            "current_catalogs": to_int(row.get("current_catalogs"), None),
+            # CP-UX-020: Fields for configuration and branding (with defaults to avoid Dirty State)
+            "columns_catalog": int(row.get("columns_catalog", 3)) if row.get("columns_catalog") is not None else 3,
+            "pdf_columns": int(row.get("pdf_columns", 2)) if row.get("pdf_columns") is not None else 2,
+            "brand_primary": row.get("brand_primary", "#2c3e50"),
+            "brand_secondary": row.get("brand_secondary", "#e74c3c"),
+            "brand_accent": row.get("brand_accent", "#3498db"),
+            "brand_text": row.get("brand_text", "#2c3e50"),
+            "pdf_layout": row.get("pdf_layout", "Profesional (v2)")
+        }
+
     def load_users(self) -> dict:
         """
         Carga todos los usuarios desde Supabase.
@@ -292,34 +340,7 @@ class SupabaseBackend(AuthBackend):
                 email = row["email"]
 
                 # Convertir tipos de Supabase a tipos Python
-                user_data = {
-                    "name": row.get("name", "Usuario"),
-                    "business_name": row.get("business_name", ""),
-                    "phone_number": row.get("phone_number", ""),
-                    "currency": row.get("currency", "S/"),
-                    "pdf_custom_title": row.get("pdf_custom_title"),
-                    "pdf_custom_subtitle": row.get("pdf_custom_subtitle"),
-                    "is_admin": bool(row.get("is_admin", False)),
-                    "status": row.get("status", "active"),
-                    "password_hash": row.get("password_hash"),
-                    "plan_type": row.get("plan_type", "Free"),
-
-                    "quota": int(row.get("quota", 5)),
-                    "quota_max": int(row.get("quota_max", 5)),
-                    "expires_at": row.get("expires_at"),  # None o fecha en formato ISO
-                    "created_at": row.get("created_at"),
-                    "last_login": row.get("last_login"),
-                    "logo_base64": row.get("logo_base64"),
-                    "logo_path": row.get("logo_path"),
-                    # CP-UX-020: Fields for configuration and branding (with defaults to avoid Dirty State)
-                    "columns_catalog": int(row.get("columns_catalog", 3)) if row.get("columns_catalog") is not None else 3,
-                    "pdf_columns": int(row.get("pdf_columns", 2)) if row.get("pdf_columns") is not None else 2,
-                    "brand_primary": row.get("brand_primary", "#2c3e50"),
-                    "brand_secondary": row.get("brand_secondary", "#e74c3c"),
-                    "brand_accent": row.get("brand_accent", "#3498db"),
-                    "brand_text": row.get("brand_text", "#2c3e50"),
-                    "pdf_layout": row.get("pdf_layout", "Profesional (v2)")
-                }
+                user_data = self._normalize_row(row)
 
                 users[email] = user_data
 
@@ -328,6 +349,17 @@ class SupabaseBackend(AuthBackend):
         except Exception as e:
             print(f"[ERROR] Fallo al cargar usuarios desde Supabase: {e}")
             return {"users": {}}
+
+    def load_user(self, email: str) -> dict:
+        """Carga un usuario específico desde Supabase."""
+        try:
+            response = self.client.table(self.table).select("*").eq("email", email.lower()).limit(1).execute()
+            if response.data:
+                return self._normalize_row(response.data[0])
+            return {}
+        except Exception as e:
+            print(f"[ERROR] Fallo al cargar usuario {email} desde Supabase: {e}")
+            return {}
 
     def save_users(self, users_data: dict):
         """
@@ -356,7 +388,7 @@ class SupabaseBackend(AuthBackend):
                     "plan_type": user_data.get("plan_type", "Free"),
                     "quota": int(user_data.get("quota", 5)),
                     "quota_max": int(user_data.get("quota_max", 5)),
-                    "expires_at": user_data.get("expires_at"),
+                    "expires_at": user_data.get("expires_at") or user_data.get("expiry_date"),
                     "created_at": user_data.get("created_at"),
                     "last_login": user_data.get("last_login"),
                     "logo_base64": user_data.get("logo_base64"),
@@ -371,9 +403,27 @@ class SupabaseBackend(AuthBackend):
                     "pdf_layout": user_data.get("pdf_layout")
                 }
 
+                if user_data.get("license_mode") is not None:
+                    supabase_data["license_mode"] = user_data.get("license_mode")
+                if user_data.get("max_catalogs") is not None:
+                    supabase_data["max_catalogs"] = user_data.get("max_catalogs")
+                if user_data.get("current_catalogs") is not None:
+                    supabase_data["current_catalogs"] = user_data.get("current_catalogs")
+
                 # UPSERT: Inserta si no existe, actualiza si existe
                 # CP-UX-020: Full persistence enabled after migration
-                response = self.client.table(self.table).upsert(supabase_data).execute()
+                try:
+                    response = self.client.table(self.table).upsert(supabase_data).execute()
+                    if getattr(response, "error", None):
+                        raise Exception(response.error)
+                except Exception as e:
+                    print(f"[WARNING] Supabase upsert falló para {email}: {e}")
+                    # Fallback: quitar campos nuevos si la tabla aún no los tiene
+                    fallback_data = dict(supabase_data)
+                    for key in ("license_mode", "max_catalogs", "current_catalogs"):
+                        if key in fallback_data:
+                            del fallback_data[key]
+                    response = self.client.table(self.table).upsert(fallback_data).execute()
 
             except Exception as e:
                 print(f"[ERROR] Fallo al guardar usuario {email}: {e}")
@@ -486,10 +536,69 @@ class AuthManager:
             return 5
         return user_info.get("quota", 0)
 
+    def _resolve_license_mode(self, user_info: dict) -> str:
+        mode = str(user_info.get("license_mode") or "").strip().lower()
+        if mode in ("date", "quantity"):
+            return mode
+        plan_type = str(user_info.get("plan_type") or "").lower()
+        if "cantidad" in plan_type or "quantity" in plan_type:
+            return "quantity"
+        if "fecha" in plan_type or "date" in plan_type:
+            return "date"
+        expiry_str = user_info.get("expires_at") or user_info.get("expiry_date")
+        return "date" if expiry_str else "quantity"
+
+    def _get_remaining_quota_from_user(self, user_info: dict) -> int:
+        max_catalogs = user_info.get("max_catalogs")
+        current_catalogs = user_info.get("current_catalogs")
+        if max_catalogs is not None and current_catalogs is not None:
+            try:
+                return max(0, int(max_catalogs) - int(current_catalogs))
+            except (TypeError, ValueError):
+                pass
+        try:
+            return max(0, int(user_info.get("quota", 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def get_license_snapshot(self, email: str) -> dict:
+        user_info = self.get_user_info(email)
+        mode = self._resolve_license_mode(user_info)
+        expiry_str = user_info.get("expires_at") or user_info.get("expiry_date")
+
+        quota_val = user_info.get("quota", 0)
+        quota_max_val = user_info.get("quota_max")
+        max_catalogs = user_info.get("max_catalogs")
+        current_catalogs = user_info.get("current_catalogs")
+
+        if max_catalogs is None:
+            max_catalogs = quota_max_val if quota_max_val is not None else quota_val
+
+        if current_catalogs is None and max_catalogs is not None:
+            try:
+                current_catalogs = max(0, int(max_catalogs) - int(quota_val))
+            except (TypeError, ValueError):
+                current_catalogs = None
+
+        remaining = self._get_remaining_quota_from_user(user_info) if mode == "quantity" else None
+
+        return {
+            "plan_type": user_info.get("plan_type", "Free"),
+            "license_mode": mode,
+            "expiry_date": expiry_str,
+            "remaining": remaining,
+            "max_catalogs": max_catalogs,
+            "current_catalogs": current_catalogs
+        }
+
     def is_plan_expired(self, email: str) -> bool:
         """Verificar si el plan ha expirado por fecha"""
         user_info = self.get_user_info(email)
-        expiry_str = user_info.get("expires_at")
+        mode = self._resolve_license_mode(user_info)
+        if mode != "date":
+            return False
+
+        expiry_str = user_info.get("expires_at") or user_info.get("expiry_date")
         
         if expiry_str:
             try:
@@ -502,21 +611,40 @@ class AuthManager:
 
     def check_quota(self, email: str) -> bool:
         """
-        Verificar si el usuario puede generar. 
+        Verificar si el usuario puede generar.
         CRITICAL CP-BUG-022: Priorizar fecha de vencimiento sobre saldo de créditos.
+        CP-BUG-2025: Soporte para planes con fecha (Free Fecha, Premium Fecha)
         """
         user_info = self.get_user_info(email)
-        expiry_str = user_info.get("expires_at")
-        
-        # 1. Si el usuario tiene una fecha de vencimiento configurada
-        if expiry_str:
-            if not self.is_plan_expired(email):
-                return True # Tiene fecha válida en el futuro -> Acceso Ilimitado (Plan Tiempo/Hybrid)
+        mode = self._resolve_license_mode(user_info)
+        expiry_str = user_info.get("expires_at") or user_info.get("expiry_date")
+        plan_type = user_info.get("plan_type", "Free")
+
+        # DEBUG INFO
+        print(f"[CHECK_QUOTA DEBUG] email={email}, plan_type={plan_type}, license_mode={mode}, expires_at={expiry_str}")
+
+        # 1. Si el usuario es modo FECHA, validar vencimiento
+        if mode == "date":
+            if not expiry_str or not str(expiry_str).strip():
+                print("[CHECK_QUOTA DEBUG] Plan fecha sin expiry_str, permitiendo acceso por fallback")
+                return True
+            is_expired = self.is_plan_expired(email)
+            print(f"[CHECK_QUOTA DEBUG] Plan con fecha: is_expired={is_expired}")
+
+            if not is_expired:
+                # Tiene fecha válida en el futuro -> Acceso Ilimitado (Plan Tiempo/Fecha)
+                print(f"[CHECK_QUOTA DEBUG] ✓ Retornando TRUE (plan con fecha vigente)")
+                return True
             else:
-                return False # Fecha ya venció -> Acceso denegado (aunque tenga créditos)
-                
-        # 2. Si no tiene fecha, validar por saldo de créditos (Plan Cantidad/Free tradicional)
-        return self.get_user_quota(email) > 0
+                # Fecha ya venció -> Acceso denegado (aunque tenga créditos)
+                print(f"[CHECK_QUOTA DEBUG] ✗ Retornando FALSE (plan con fecha VENCIDO)")
+                return False
+
+        # 2. Modo CANTIDAD: validar por saldo de créditos
+        remaining = self._get_remaining_quota_from_user(user_info)
+        result = remaining > 0
+        print(f"[CHECK_QUOTA DEBUG] Plan por cantidad: remaining={remaining}, resultado={result}")
+        return result
 
     def decrement_quota(self, email: str) -> bool:
         """Restar 1 crédito al usuario. Retorna True si fue exitoso y autorizado."""
@@ -526,8 +654,29 @@ class AuthManager:
         
         email = email.lower()
         if email in self.users["users"]:
-            current_quota = self.get_user_quota(email)
-            self.users["users"][email]["quota"] = current_quota - 1
+            user_info = self.users["users"][email]
+            mode = self._resolve_license_mode(user_info)
+
+            if mode == "date":
+                # Plan por fecha no consume cuotas
+                return True
+
+            max_catalogs = user_info.get("max_catalogs")
+            current_catalogs = user_info.get("current_catalogs")
+
+            if max_catalogs is not None and current_catalogs is not None:
+                try:
+                    new_current = int(current_catalogs) + 1
+                    user_info["current_catalogs"] = new_current
+                    if "quota" in user_info:
+                        user_info["quota"] = max(0, int(max_catalogs) - new_current)
+                except (TypeError, ValueError):
+                    current_quota = self.get_user_quota(email)
+                    user_info["quota"] = current_quota - 1
+            else:
+                current_quota = self.get_user_quota(email)
+                user_info["quota"] = current_quota - 1
+
             self._save_users()
             return True
         return False
@@ -557,7 +706,7 @@ class AuthManager:
             return True
         return False
 
-    def update_user_plan_details(self, email: str, plan_type: str = None, quota: int = None, quota_max: int = None, expires_at: str = None) -> bool:
+    def update_user_plan_details(self, email: str, plan_type: str = None, quota: int = None, quota_max: int = None, expires_at: str = None, license_mode: str = None, clear_expiry: bool = False) -> bool:
         """Actualizar detalles del plan del usuario (Admin function)"""
         email = email.lower()
         if email not in self.users["users"]:
@@ -569,6 +718,10 @@ class AuthManager:
         if plan_type is not None:
             user["plan_type"] = plan_type
             changed = True
+
+        if license_mode is not None:
+            user["license_mode"] = license_mode
+            changed = True
         
         if quota is not None:
              user["quota"] = int(quota)
@@ -578,9 +731,12 @@ class AuthManager:
              user["quota_max"] = int(quota_max)
              changed = True
              
-        if expires_at is not None:
-             user["expires_at"] = expires_at
-             changed = True
+        if clear_expiry:
+            user["expires_at"] = None
+            changed = True
+        elif expires_at is not None:
+            user["expires_at"] = expires_at
+            changed = True
              
         if changed:
             self._save_users()
@@ -607,6 +763,23 @@ class AuthManager:
     
     def get_user_info(self, email: str) -> dict:
         return self.users["users"].get(email.lower(), {})
+
+    def refresh_user(self, email: str) -> dict:
+        """Recarga datos del usuario desde el backend (fuente de verdad)."""
+        email = email.lower().strip()
+        if not email:
+            return {}
+        try:
+            fresh = self.backend.load_user(email)
+            if fresh:
+                self.users["users"][email] = fresh
+        except Exception as e:
+            print(f"[WARNING] No se pudo refrescar usuario {email}: {e}")
+        return self.users["users"].get(email, {})
+
+    def refresh_users(self):
+        """Recarga todos los usuarios desde el backend."""
+        self._load_users()
     
     def is_admin(self, email: str) -> bool:
         user_info = self.get_user_info(email)
@@ -998,9 +1171,7 @@ def check_authentication():
             
             st.write("") # Vertical spacing
 
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                submitted = st.form_submit_button("Acceder al Sistema", use_container_width=True)
+            submitted = st.form_submit_button("🔓 Acceder al Sistema", use_container_width=True)
 
             if submitted:
                 with st.spinner("Verificando credenciales..."):
@@ -1021,8 +1192,9 @@ def check_authentication():
                             # Login exitoso
                             st.session_state.authenticated = True
                             st.session_state.user_email = email
-                            st.session_state.user_info = auth.get_user_info(email)
+                            st.session_state.user_info = auth.refresh_user(email) or auth.get_user_info(email)
                             auth.update_last_login(email)
+                            st.session_state.user_info = auth.get_user_info(email)
                             st.success("¡Bienvenido!")
                             time.sleep(0.5)
                             st.rerun()
@@ -1042,22 +1214,8 @@ def check_authentication():
         st.markdown('</div>', unsafe_allow_html=True)
         st.stop()
     
-    with st.sidebar:
-        user_info = st.session_state.user_info
-        
-        # Header profesional
-        st.markdown(f"""
-        <div style="padding: 1rem; background-color: #f0f2f6; border-radius: 8px; margin-bottom: 1rem;">
-            <div style="font-size: 0.8rem; color: #555;">Bienvenido,</div>
-            <div style="font-weight: bold; font-size: 1.1rem; color: #013366;">{user_info.get('name', 'Usuario')}</div>
-            <div style="font-size: 0.9rem; color: #fe933a;">{user_info.get('business_name', 'N/A')}</div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if st.button(" Cerrar Sesión", use_container_width=True, type="secondary"):
-            st.session_state.authenticated = False
-            st.session_state.user_email = None
-            st.session_state.user_info = None
-            st.rerun()
-    
+    # Sync en cada recarga para evitar datos stale
+    if st.session_state.authenticated and st.session_state.user_email:
+        st.session_state.user_info = auth.refresh_user(st.session_state.user_email)
+
     return auth
