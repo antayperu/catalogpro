@@ -1898,7 +1898,7 @@ class EnhancedCatalogApp:
             unsafe_allow_html=True
         )
 
-        if st.sidebar.button(" Cerrar Sesión", use_container_width=True, type="secondary"):
+        if st.sidebar.button(" Cerrar Sesión", use_container_width=True, type="secondary", key="btn_logout"):
             self.logout()
 
     def render_brand_configuration(self, baseline):
@@ -2186,7 +2186,7 @@ class EnhancedCatalogApp:
         save_btn_label = "💾 Guardar Configuración" if is_dirty else "Sin cambios"
         
         # Use simple st.button instead of form_submit_button
-        if st.sidebar.button(save_btn_label, type="primary", disabled=not is_dirty, use_container_width=True):
+        if st.sidebar.button(save_btn_label, type="primary", disabled=not is_dirty, use_container_width=True, key="btn_save_config"):
             with st.spinner("Guardando cambios..."):
                 updates = current.copy()
                 
@@ -2281,11 +2281,11 @@ class EnhancedCatalogApp:
         """Tab de seguridad para cambio de contraseña"""
         st.header("Seguridad")
         st.subheader("Cambiar Contraseña")
-        current_pass = st.text_input("Contraseña Actual", type="password")
-        new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres")
-        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password")
+        current_pass = st.text_input("Contraseña Actual", type="password", key="sec_current_pass")
+        new_pass = st.text_input("Nueva Contraseña", type="password", help="Mínimo 6 caracteres", key="sec_new_pass")
+        confirm_pass = st.text_input("Confirmar Nueva Contraseña", type="password", key="sec_confirm_pass")
 
-        if st.button("Actualizar Contraseña", type="primary", use_container_width=True):
+        if st.button("Actualizar Contraseña", type="primary", use_container_width=True, key="btn_update_pass"):
             auth = st.session_state.auth_manager
             if not current_pass or not new_pass:
                 st.error("Todos los campos son obligatorios")
@@ -3021,7 +3021,8 @@ class EnhancedCatalogApp:
                 type="primary",
                 use_container_width=True,
                 disabled=not has_quota,
-                help="Genera un nuevo catálogo PDF" if has_quota else "❌ Sin créditos disponibles"
+                help="Genera un nuevo catálogo PDF" if has_quota else "❌ Sin créditos disponibles",
+                key="btn_generate_pdf"
             )
 
         with c_download:
